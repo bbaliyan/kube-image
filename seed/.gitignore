@@ -1,5 +1,9 @@
 .terraform/
-.terraform.lock.hcl
 terraform.tfstate
 terraform.tfstate.backup
+terraform.tfstate.d/
 *.auto.tfvars
+terraform.tfvars
+*.tfplan
+
+# Committed lockfile stays tracked — do NOT ignore .terraform.lock.hcl

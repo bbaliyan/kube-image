@@ -31,6 +31,12 @@ variable "disk_datastore_id" {
   description = "Proxmox storage ID for the cloned VM's disk, e.g. local-zfs."
 }
 
+variable "proxmox_insecure_skip_tls_verify" {
+  type        = bool
+  default     = true
+  description = "Skip TLS certificate verification for the Proxmox API — matches seed/variables.tf's proxmox_insecure default (true for a self-signed PVE cert, the common case)."
+}
+
 variable "ssh_username" {
   type        = string
   default     = "almalinux"

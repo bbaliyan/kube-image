@@ -1,9 +1,9 @@
 resource "proxmox_download_file" "os_image" {
-  content_type       = "import"
-  datastore_id       = var.iso_datastore_id
-  node_name          = var.proxmox_node
-  url                = var.os_image_url
-  file_name          = coalesce(var.os_image_file_name, basename(var.os_image_url))
+  content_type        = "import"
+  datastore_id        = var.iso_datastore_id
+  node_name           = var.proxmox_node
+  url                 = var.os_image_url
+  file_name           = coalesce(var.os_image_file_name, basename(var.os_image_url))
   overwrite_unmanaged = false
 
   lifecycle {
@@ -11,6 +11,28 @@ resource "proxmox_download_file" "os_image" {
       condition     = var.os_image_file_name != null || !endswith(var.os_image_url, ".img")
       error_message = "os_image_url ends in '.img' which Proxmox rejects as an import extension. Set os_image_file_name to a .qcow2 filename."
     }
+  }
+}
+
+# AlmaLinux's GenericCloud image doesn't ship qemu-guest-agent. Without it
+# actually installed and running in the guest, Packer's proxmox-clone builder
+# (which uses the guest agent to discover the cloned VM's IP) hangs until
+# ssh_timeout and fails every build.
+resource "proxmox_virtual_environment_file" "vendor_data" {
+  content_type = "snippets"
+  datastore_id = var.iso_datastore_id
+  node_name    = var.proxmox_node
+
+  source_raw {
+    data = join("\n", [
+      "#cloud-config",
+      "packages:",
+      "  - qemu-guest-agent",
+      "runcmd:",
+      "  - systemctl enable --now qemu-guest-agent",
+      "",
+    ])
+    file_name = "kube-image-seed-vendor-data.yaml"
   }
 }
 
@@ -66,7 +88,8 @@ resource "proxmox_virtual_environment_vm" "seed" {
   # this is what lets Packer's proxmox-clone source (and its own SSH communicator)
   # connect to every clone without any manual seed customization step.
   initialization {
-    datastore_id = var.disk_datastore_id
+    datastore_id        = var.disk_datastore_id
+    vendor_data_file_id = proxmox_virtual_environment_file.vendor_data.id
 
     user_account {
       username = var.ssh_username

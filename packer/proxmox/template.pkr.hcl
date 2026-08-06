@@ -22,7 +22,7 @@ source "proxmox-clone" "rke2" {
   proxmox_url              = var.proxmox_url
   username                 = var.proxmox_api_token_id
   token                    = var.proxmox_api_token_secret
-  insecure_skip_tls_verify = false
+  insecure_skip_tls_verify = var.proxmox_insecure_skip_tls_verify
 
   node                 = var.proxmox_node
   clone_vm_id          = var.seed_template_vm_id

@@ -10,6 +10,7 @@ installing from ISO. Create it once per Proxmox cluster with the automated
 `seed/` OpenTofu config — no manual Proxmox UI or `qm` commands:
 
 ```bash
+# From the kube-image repo root:
 cd seed
 tofu init
 tofu apply -var proxmox_node=<your-node> -var disk_datastore_id=<your-datastore> -var iso_datastore_id=<your-datastore>

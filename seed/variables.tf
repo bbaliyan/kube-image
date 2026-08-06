@@ -9,6 +9,23 @@ variable "proxmox_node" {
   type        = string
 }
 
+variable "proxmox_ssh_user" {
+  description = "PAM (Linux) user on the Proxmox host that bpg/proxmox connects as via SSH to upload the vendor-data snippet. Root is the simplest default for a one-time bootstrap step; kube-compute's own consumer examples use a dedicated non-root PAM user for day-to-day cluster provisioning, but that's not required here."
+  type        = string
+  default     = "root"
+}
+
+variable "proxmox_ssh_key_file" {
+  description = "SSH private key for proxmox_ssh_user, used only for the snippet upload. Defaults to the same key kube-examples' devcontainer already mounts and bpg/proxmox already uses for cloud-init/vendor-data snippet uploads elsewhere in this project."
+  type        = string
+  default     = "~/.ssh/id_ed25519"
+}
+
+variable "proxmox_ssh_address" {
+  description = "Hostname or IP Terraform uses to SSH to the Proxmox node for the snippet upload — usually the same host as PROXMOX_VE_ENDPOINT, without the https:// scheme or :8006 port."
+  type        = string
+}
+
 variable "disk_datastore_id" {
   description = "Proxmox storage ID for the seed template's disk and cloud-init drive. Must support the 'images' content type."
   type        = string
