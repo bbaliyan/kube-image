@@ -1,0 +1,11 @@
+# Packer
+packer_cache/
+*.pkrvars.hcl
+!*.pkrvars.hcl.example
+crash.log
+
+# Ansible
+*.retry
+
+# Editor/OS
+.DS_Store
