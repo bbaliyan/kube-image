@@ -1,0 +1,167 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+
+- name: os-prep | inotify limits
+  ansible.builtin.copy:
+    src: 99-rke2-inotify.conf
+    dest: /etc/sysctl.d/99-rke2-inotify.conf
+    mode: "0644"
+  register: inotify_conf
+
+- name: os-prep | apply inotify limits immediately
+  ansible.builtin.command: sysctl -p /etc/sysctl.d/99-rke2-inotify.conf
+  when: inotify_conf.changed
+
+- name: os-prep | hot-added vCPU online rule (Proxmox/KVM guest)
+  ansible.builtin.copy:
+    src: 80-hotplug-cpu-online.rules
+    dest: /etc/udev/rules.d/80-hotplug-cpu-online.rules
+    mode: "0644"
+
+- name: os-prep | permanently quiesce background dnf/rpm-lock holders
+  ansible.builtin.systemd:
+    name: "{{ item }}"
+    state: stopped
+    enabled: false
+  loop:
+    - packagekit
+    - packagekit.socket
+    - dnf-makecache.timer
+    - dnf-makecache.service
+  failed_when: false
+
+# Full OS currency at bake time — replaces node-bootstrap's first-boot os_patch
+# call, which is now redundant on a fresh image (see the design spec's node-os-patch
+# section). Independent copy of the dnf-update-loop logic, not shared with
+# node-os-patch's role — two separate public repos, matching existing precedent
+# (rke2-selinux's own retry logic carries the same "extract when a third copy
+# shows up" note). No wait-for-reconnect logic here: Packer's own `reboot`
+# provisioner (Task 3) handles the reboot/reconnect, unlike os_patch's reboot.yml
+# which manages that itself for a live, already-connected node.
+- name: os-prep | run dnf update -y (retry + self-heal on lock contention)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      for attempt in 1 2 3 4 5; do
+        dnf update -y && exit 0
+        [ "$attempt" -eq 5 ] && exit 1
+        sleep 15
+        pkill -x dnf 2>/dev/null || true
+        pkill -x rpm 2>/dev/null || true
+      done
+  changed_when: true
+
+- name: os-prep | check whether a reboot is needed
+  ansible.builtin.dnf:
+    name: dnf-utils
+    state: present
+
+- name: os-prep | check whether a reboot is needed
+  ansible.builtin.command: dnf needs-restarting -r
+  register: bake_reboot_check
+  failed_when: false
+  changed_when: false
+
+- name: os-prep | record whether a reboot is needed
+  ansible.builtin.set_fact:
+    bake_reboot_needed: "{{ bake_reboot_check.rc == 1 }}"
+
+- name: os-prep | install ca-certificates and curl, load br_netfilter/overlay
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      dnf makecache
+      dnf install -y ca-certificates curl
+      # AlmaLinux 10's minimal image ships only kernel-modules-core, which excludes
+      # nft_compat (the iptables-nft translation shim). Cilium's default VXLAN mode
+      # installs its tunnel-accept rule via classic iptables syntax, which needs
+      # nft_compat — without it Cilium's iptables reconciliation fails and freshly
+      # created pods become unreachable. Use the unversioned "-matched" meta-package,
+      # not a pinned NVR: the BaseOS repo only keeps the subpackage for the latest
+      # kernel, so a pinned request can match nothing for the image's running kernel.
+      dnf install -y kernel-modules-extra-matched
+      modprobe nft_compat
+      # RHEL10 kernels (6.12+) dropped br_netfilter — bridged traffic is filtered
+      # natively via nftables bridge hooks, so there's no module to load and no
+      # bridge-nf-call-* knob. RHEL9 kernels still ship it and need both.
+      if modinfo br_netfilter >/dev/null 2>&1; then
+        printf 'br_netfilter\noverlay\n' >/etc/modules-load.d/rke2.conf
+        modprobe br_netfilter
+      else
+        printf 'overlay\n' >/etc/modules-load.d/rke2.conf
+      fi
+      modprobe overlay
+      printf 'net.ipv4.ip_forward = 1\n' >/etc/sysctl.d/98-rke2-bridge.conf
+      if [ -d /proc/sys/net/bridge ]; then
+        printf 'net.bridge.bridge-nf-call-iptables = 1\nnet.bridge.bridge-nf-call-ip6tables = 1\n' >>/etc/sysctl.d/98-rke2-bridge.conf
+      fi
+      sysctl --system
+    creates: /etc/modules-load.d/rke2.conf
+
+- name: os-prep | install and enable qemu-guest-agent
+  ansible.builtin.dnf:
+    name: qemu-guest-agent
+    state: present
+
+- name: os-prep | enable qemu-guest-agent
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    state: started
+    enabled: true
+
+- name: os-prep | label the local-path-provisioner directory for container write access
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      dnf install -y policycoreutils-python-utils
+      mkdir -p /var/lib/rancher/local-path-provisioner
+      if ! semanage fcontext -l | grep -q '^/var/lib/rancher/local-path-provisioner(/\.\*)?  '; then
+        semanage fcontext -a -t container_file_t '/var/lib/rancher/local-path-provisioner(/.*)?'
+      fi
+      restorecon -R /var/lib/rancher/local-path-provisioner
+
+- name: selinux-prep | add the rancher-rke2-common repo
+  ansible.builtin.yum_repository:
+    name: rancher-rke2-common-stable
+    description: Rancher RKE2 Common (stable)
+    baseurl: https://rpm.rancher.io/rke2/stable/common/centos/9/noarch
+    enabled: true
+    gpgcheck: true
+    gpgkey: https://rpm.rancher.io/public.key
+
+- name: selinux-prep | import the Rancher GPG key (retry — transient failures)
+  ansible.builtin.rpm_key:
+    key: https://rpm.rancher.io/public.key
+    state: present
+  register: gpg_import
+  retries: 3
+  delay: 10
+  until: gpg_import is succeeded
+
+- name: selinux-prep | install rke2-selinux (retry + self-heal on lock contention)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      dnf makecache
+      for attempt in 1 2 3 4 5; do
+        dnf install -y rke2-selinux && exit 0
+        [ "$attempt" -eq 5 ] && exit 1
+        sleep 15
+        pkill -x dnf 2>/dev/null || true
+        pkill -x rpm 2>/dev/null || true
+      done
+  changed_when: true
+
+# Installs both rke2-server.service and rke2-agent.service units, unstarted.
+# Role selection (which unit to enable+start) is entirely a launch-time decision —
+# kube-compute's lean cloud-init picks based on node_role. Not yet verified against
+# a real installed image; confirm at the first real Packer bake (README's manual
+# validation step).
+- name: rke2 | install RKE2 (unqualified — both server and agent units)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      curl -sfL https://get.rke2.io | sh -
+    creates: /usr/local/bin/rke2-uninstall.sh
+  environment:
+    INSTALL_RKE2_VERSION: "{{ k8s_version }}"
