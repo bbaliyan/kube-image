@@ -1,0 +1,76 @@
+# SPDX-License-Identifier: Apache-2.0
+packer {
+  required_plugins {
+    proxmox = {
+      version = ">= 1.2.0"
+      source  = "github.com/hashicorp/proxmox"
+    }
+    ansible = {
+      version = ">= 1.1.1"
+      source  = "github.com/hashicorp/ansible"
+    }
+  }
+}
+
+locals {
+  build_date = formatdate("YYYY-MM-DD", timestamp())
+  image_name = "kube-image-${var.k8s_version}-${var.cilium_version}-${var.argocd_version}-${local.build_date}"
+}
+
+source "proxmox-clone" "rke2" {
+  proxmox_url              = var.proxmox_url
+  username                 = var.proxmox_api_token_id
+  token                    = var.proxmox_api_token_secret
+  insecure_skip_tls_verify = false
+
+  node                 = var.proxmox_node
+  clone_vm_id          = var.seed_template_vm_id
+  full_clone           = true
+  vm_name              = local.image_name
+  template_name        = local.image_name
+  template_description = "RKE2 ${var.k8s_version} / Cilium ${var.cilium_version} / Argo CD ${var.argocd_version}, baked ${local.build_date}"
+
+  cores  = 2
+  memory = 2048
+
+  disks {
+    disk_size    = "20G"
+    storage_pool = var.disk_datastore_id
+    type         = "scsi"
+  }
+
+  network_adapters {
+    bridge = "vmbr0"
+    model  = "virtio"
+  }
+
+  ssh_username         = var.ssh_username
+  ssh_private_key_file = var.ssh_private_key_file
+  ssh_timeout          = "10m"
+}
+
+build {
+  name    = "rke2-proxmox"
+  sources = ["source.proxmox-clone.rke2"]
+
+  provisioner "ansible" {
+    playbook_file = "../../ansible/playbook.yml"
+    user          = var.ssh_username
+    extra_arguments = [
+      "--extra-vars", "k8s_version=${var.k8s_version}",
+    ]
+  }
+
+  # OS update in the Ansible role may leave a reboot-needed kernel — reboot before
+  # Packer converts the VM to a template so the template boots on the current
+  # kernel, not a stale in-memory one.
+  provisioner "shell" {
+    inline            = ["sudo reboot"]
+    expect_disconnect = true
+  }
+
+  provisioner "shell" {
+    pause_before = "30s"
+    inline       = ["echo reconnected"]
+  }
+}

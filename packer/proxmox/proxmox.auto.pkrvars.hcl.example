@@ -1,0 +1,9 @@
+proxmox_url              = "https://pve.example.com:8006/api2/json"
+proxmox_api_token_id     = "root@pam!packer"
+proxmox_api_token_secret = "REPLACE_ME"
+proxmox_node             = "pve"
+seed_template_vm_id      = 9000
+disk_datastore_id        = "local-zfs"
+k8s_version              = "v1.36.1+rke2r1"
+cilium_version           = "1.18.3"
+argocd_version           = "9.1.5"
