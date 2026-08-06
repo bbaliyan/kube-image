@@ -1,7 +1,7 @@
 # kube-image
 
 Packer templates and a shared Ansible bake role that pre-build RKE2 node images —
-OS prep, CA-trust/registry-mirror mechanism, and RKE2 binaries baked in — so
+OS prep, SELinux/kernel-module prerequisites, and RKE2 binaries baked in — so
 `kube-compute`'s node modules launch from a ready image instead of bootstrapping
 from scratch on every apply. Per-cluster identity, secrets, and join logic stay a
 launch-time concern (`kube-compute`'s `node-bootstrap` module), not baked here.
@@ -35,10 +35,12 @@ Requires a one-time seed AlmaLinux 10 Proxmox template — see
 
 ## Development
 
-Open in the devcontainer (`ghcr.io/bbaliyan/kube-devenv` + Packer). Validate without
+Open in the devcontainer (`ghcr.io/bbaliyan/kube-devenv` + Packer). Requires a local
+`kube-devenv:local` image build that includes Packer — rebuild it from
+`kube-devenv` if your local image predates the Packer addition. Validate without
 a live Proxmox connection:
 
 ```bash
 cd packer/proxmox && packer fmt -check . && packer validate .
-ansible-playbook --syntax-check -i localhost, ../../ansible/roles/rke2_bake/tasks/main.yml 2>/dev/null || true
+cd ../../ansible && ansible-playbook --syntax-check -i localhost, playbook.yml
 ```

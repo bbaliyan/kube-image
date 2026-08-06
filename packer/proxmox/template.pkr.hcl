@@ -13,8 +13,9 @@ packer {
 }
 
 locals {
-  build_date = formatdate("YYYY-MM-DD", timestamp())
-  image_name = "kube-image-${var.k8s_version}-${var.cilium_version}-${var.argocd_version}-${local.build_date}"
+  build_date       = formatdate("YYYY-MM-DD", timestamp())
+  k8s_version_safe = replace(var.k8s_version, "+", "-")
+  image_name       = "kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}"
 }
 
 source "proxmox-clone" "rke2" {

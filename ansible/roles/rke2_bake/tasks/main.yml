@@ -35,9 +35,13 @@
 # section). Independent copy of the dnf-update-loop logic, not shared with
 # node-os-patch's role — two separate public repos, matching existing precedent
 # (rke2-selinux's own retry logic carries the same "extract when a third copy
-# shows up" note). No wait-for-reconnect logic here: Packer's own `reboot`
-# provisioner (Task 3) handles the reboot/reconnect, unlike os_patch's reboot.yml
-# which manages that itself for a live, already-connected node.
+# shows up" note). The reboot itself is handled below, mid-role, by an
+# ansible.builtin.reboot task gated on the needs-restarting check — this runs
+# before the kernel-module install task so that install targets the post-update
+# kernel. Packer's own end-of-build shell provisioners (a `sudo reboot` plus a
+# pause-then-reconnect step, not a built-in Packer reboot provisioner — Packer
+# has none for Linux) still run afterward as a harmless final safety reboot, but
+# they are not what makes kernel-module install target the right kernel.
 - name: os-prep | run dnf update -y (retry + self-heal on lock contention)
   ansible.builtin.shell:
     cmd: |
@@ -65,6 +69,11 @@
 - name: os-prep | record whether a reboot is needed
   ansible.builtin.set_fact:
     bake_reboot_needed: "{{ bake_reboot_check.rc == 1 }}"
+
+- name: os-prep | reboot if the OS update requires it
+  ansible.builtin.reboot:
+    reboot_timeout: 600
+  when: bake_reboot_needed
 
 - name: os-prep | install ca-certificates and curl, load br_netfilter/overlay
   ansible.builtin.shell:
@@ -165,3 +174,41 @@
     creates: /usr/local/bin/rke2-uninstall.sh
   environment:
     INSTALL_RKE2_VERSION: "{{ k8s_version }}"
+
+# Everything below is template-prep cleanup and MUST stay last: clones must not
+# inherit this builder's machine identity, SSH host keys, or the Packer
+# build-time SSH key, and cloud-init must re-run fresh on every clone.
+- name: template-prep | clean cloud-init state so clones re-run it fresh
+  ansible.builtin.command: cloud-init clean --logs --seed
+  changed_when: true
+
+- name: template-prep | reset machine-id so clones each generate their own
+  ansible.builtin.file:
+    path: /etc/machine-id
+    state: absent
+
+- name: template-prep | recreate empty machine-id (systemd expects the file to exist)
+  ansible.builtin.file:
+    path: /etc/machine-id
+    state: touch
+    mode: "0444"
+
+- name: template-prep | remove SSH host keys so clones each generate their own
+  ansible.builtin.shell:
+    cmd: rm -f /etc/ssh/ssh_host_*
+  changed_when: true
+
+- name: template-prep | remove the Packer build-time SSH authorized_keys
+  ansible.builtin.file:
+    path: "/home/{{ ansible_user_id if ansible_user_id != 'root' else 'root' }}/.ssh/authorized_keys"
+    state: absent
+  when: ansible_user_id != "root"
+
+- name: template-prep | remove root's authorized_keys too, if present
+  ansible.builtin.file:
+    path: /root/.ssh/authorized_keys
+    state: absent
+
+- name: template-prep | clean dnf cache
+  ansible.builtin.command: dnf clean all
+  changed_when: true
