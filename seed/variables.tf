@@ -32,7 +32,7 @@ variable "disk_datastore_id" {
 }
 
 variable "iso_datastore_id" {
-  description = "Proxmox storage ID for the downloaded OS image. Must support the 'import' content type. Often the same value as disk_datastore_id, but Proxmox distinguishes the two content types, so kept separate."
+  description = "Proxmox storage ID for the downloaded OS image and the qemu-guest-agent vendor-data snippet. Must support both the 'import' and 'snippets' content types. Often the same value as disk_datastore_id, but Proxmox distinguishes the content types, so kept separate."
   type        = string
 }
 
