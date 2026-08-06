@@ -22,6 +22,10 @@ documentation only — kube-compute performs no compatibility check against it.
 
 ## Building
 
+Requires a one-time seed AlmaLinux 10 Proxmox template — see
+`packer/proxmox/README.md`'s "One-time setup" (a single automated `tofu apply`,
+not a manual step).
+
 ```bash
 cd packer/proxmox
 cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
@@ -29,9 +33,6 @@ cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
 packer init .
 packer build .
 ```
-
-Requires a one-time seed AlmaLinux 10 Proxmox template — see
-`packer/proxmox/README.md`.
 
 ## Development
 

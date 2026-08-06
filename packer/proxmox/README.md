@@ -6,27 +6,23 @@ AlmaLinux 10 template.
 ## One-time setup: create the seed template
 
 kube-image clones from an existing AlmaLinux 10 Proxmox template rather than
-installing from ISO. Create it once, using the same cloud-image download+import
-mechanism `kube-compute`'s `proxmox-control-plane` module uses:
+installing from ISO. Create it once per Proxmox cluster with the automated
+`seed/` OpenTofu config — no manual Proxmox UI or `qm` commands:
 
-1. Download the AlmaLinux 10 GenericCloud qcow2 image to Proxmox storage (via the
-   Proxmox UI's "Download from URL" on your datastore, or `pvesm`).
-2. Create a VM from it (`qm create` + `qm importdisk`), attach a cloud-init drive,
-   and set the boot disk.
-3. Set the cloud-init user and SSH public key on the seed so they match this
-   template's `ssh_username`/`ssh_private_key_file` variables:
-   `qm set <vmid> --ciuser <user> --sshkeys <path-to-pubkey>`.
-4. Install and enable `qemu-guest-agent` inside the seed VM's guest OS, then tell
-   Proxmox the agent is present: `qm set <vmid> --agent enabled=1`. The
-   `proxmox-clone` builder defaults to `qemu_agent = true` and uses the agent to
-   discover the cloned builder VM's IP — without this the build hangs until
-   `ssh_timeout` and fails.
-5. Convert the VM to a template: `qm template <vmid>`.
-6. Note the resulting VM ID — that's `seed_template_vm_id` in
-   `proxmox.auto.pkrvars.hcl`.
+```bash
+cd seed
+tofu init
+tofu apply -var proxmox_node=<your-node> -var disk_datastore_id=<your-datastore> -var iso_datastore_id=<your-datastore>
+```
 
-This is a manual, once-per-Proxmox-cluster step, not automated by this repo (per
-the design spec's charting decision — CI/build automation is out of scope for v1).
+Proxmox credentials come from `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN`
+(already loaded by the devcontainer). `os_image_url` defaults to the current
+AlmaLinux 10 GenericCloud image — override it only if you need a different
+mirror or build. Note the `seed_template_vm_id` output; that's the
+`seed_template_vm_id` value in `proxmox.auto.pkrvars.hcl` below.
+
+This is a one-time step per Proxmox cluster, not per build — every subsequent
+`packer build` clones from the same seed.
 
 ## Building
 
