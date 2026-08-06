@@ -61,17 +61,4 @@ build {
       "--extra-vars", "k8s_version=${var.k8s_version}",
     ]
   }
-
-  # OS update in the Ansible role may leave a reboot-needed kernel — reboot before
-  # Packer converts the VM to a template so the template boots on the current
-  # kernel, not a stale in-memory one.
-  provisioner "shell" {
-    inline            = ["sudo reboot"]
-    expect_disconnect = true
-  }
-
-  provisioner "shell" {
-    pause_before = "30s"
-    inline       = ["echo reconnected"]
-  }
 }

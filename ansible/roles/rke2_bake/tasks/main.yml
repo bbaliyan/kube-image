@@ -55,7 +55,7 @@
       done
   changed_when: true
 
-- name: os-prep | check whether a reboot is needed
+- name: os-prep | install dnf-utils for needs-restarting
   ansible.builtin.dnf:
     name: dnf-utils
     state: present
@@ -200,9 +200,9 @@
 
 - name: template-prep | remove the Packer build-time SSH authorized_keys
   ansible.builtin.file:
-    path: "/home/{{ ansible_user_id if ansible_user_id != 'root' else 'root' }}/.ssh/authorized_keys"
+    path: "/home/{{ ansible_user }}/.ssh/authorized_keys"
     state: absent
-  when: ansible_user_id != "root"
+  when: ansible_user != "root"
 
 - name: template-prep | remove root's authorized_keys too, if present
   ansible.builtin.file:
