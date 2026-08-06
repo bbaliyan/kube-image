@@ -38,10 +38,7 @@
 # shows up" note). The reboot itself is handled below, mid-role, by an
 # ansible.builtin.reboot task gated on the needs-restarting check — this runs
 # before the kernel-module install task so that install targets the post-update
-# kernel. Packer's own end-of-build shell provisioners (a `sudo reboot` plus a
-# pause-then-reconnect step, not a built-in Packer reboot provisioner — Packer
-# has none for Linux) still run afterward as a harmless final safety reboot, but
-# they are not what makes kernel-module install target the right kernel.
+# kernel.
 - name: os-prep | run dnf update -y (retry + self-heal on lock contention)
   ansible.builtin.shell:
     cmd: |
