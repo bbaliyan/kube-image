@@ -30,6 +30,12 @@ source "proxmox-clone" "rke2" {
   vm_name              = local.image_name
   template_name        = local.image_name
   template_description = "RKE2 ${var.k8s_version} / Cilium ${var.cilium_version} / Argo CD ${var.argocd_version}, baked ${local.build_date}"
+  # Semicolon-separated (packer-plugin-proxmox's Tags is a single string, unlike
+  # bpg/proxmox's list-typed tags on the seed) — mirrors the seed's "kube-image"
+  # tag so both are findable together in the Proxmox UI, plus "template" (the
+  # seed's own tag is "seed-template" — distinct so the two are never confused)
+  # and the sanitized k8s_version for quick filtering without opening the VM.
+  tags = "kube-image;template;${local.k8s_version_safe}"
 
   cores  = 2
   memory = 2048
