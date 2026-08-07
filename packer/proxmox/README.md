@@ -29,7 +29,23 @@ vendor-data snippet that installs `qemu-guest-agent`, usually the same host as
 `~/.ssh/id_ed25519_tofu` key — the same PVE-ops account this project's
 `kube-examples` consumer repo already provisions (see its
 `live/proxmox/README.md`, "One-time: user and token setup"); override
-`proxmox_ssh_user`/`proxmox_ssh_key_file` if yours differs. `iso_datastore_id`
+`proxmox_ssh_user`/`proxmox_ssh_key_file` if yours differs. **No SSH key set
+up?** Pass a password instead — `proxmox_ssh_user` defaults to `tofu`, or
+override it to `root`/whatever account you have a password for:
+
+```bash
+tofu apply \
+  -var proxmox_node=<your-node> \
+  -var disk_datastore_id=<your-datastore> \
+  -var iso_datastore_id=<your-datastore> \
+  -var proxmox_ssh_address=<your-proxmox-host-or-ip> \
+  -var proxmox_ssh_user=root \
+  -var proxmox_ssh_password="$(read -srp 'PVE SSH password: ' p && echo "$p")"
+```
+
+(the subshell keeps the password out of shell history and `ps`; never put it
+in a committed `.tfvars` file — `TF_VAR_proxmox_ssh_password` as an env var
+works too). `iso_datastore_id`
 must support both the `import` and
 `snippets` content types (PVE directory-backed storage typically supports
 both, but `snippets` may need enabling separately — check under

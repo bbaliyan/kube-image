@@ -16,9 +16,16 @@ variable "proxmox_ssh_user" {
 }
 
 variable "proxmox_ssh_key_file" {
-  description = "SSH private key for proxmox_ssh_user, used only for the snippet upload. Defaults to the same PVE-ops key (distinct from the guest-access key below) kube-examples' devcontainer already mounts and bpg/proxmox already uses for cloud-init/vendor-data snippet uploads elsewhere in this project."
+  description = "SSH private key for proxmox_ssh_user, used only for the snippet upload. Defaults to the same PVE-ops key (distinct from the guest-access key below) kube-examples' devcontainer already mounts and bpg/proxmox already uses for cloud-init/vendor-data snippet uploads elsewhere in this project. Ignored when proxmox_ssh_password is set."
   type        = string
   default     = "~/.ssh/id_ed25519_tofu"
+}
+
+variable "proxmox_ssh_password" {
+  description = "Password for proxmox_ssh_user, as an alternative to proxmox_ssh_key_file if you haven't set up an SSH key for the PVE host. Sensitive — pass via TF_VAR_proxmox_ssh_password or -var on the command line, never a committed .tfvars file. Null (the default) uses proxmox_ssh_key_file instead."
+  type        = string
+  default     = null
+  sensitive   = true
 }
 
 variable "proxmox_ssh_address" {
