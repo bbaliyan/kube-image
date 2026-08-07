@@ -45,8 +45,8 @@ variable "ssh_username" {
 
 variable "ssh_private_key_file" {
   type        = string
-  default     = "~/.ssh/id_ed25519"
-  description = "SSH private key path, matching the seed template's authorized cloud-init public key."
+  default     = "~/.ssh/id_ed25519_kube_cluster"
+  description = "SSH private key path, matching the seed template's authorized cloud-init public key (seed/variables.tf's ssh_public_key_path — this project's dedicated guest-access key, distinct from the PVE-ops key used to reach the Proxmox API host itself)."
 }
 
 variable "k8s_version" {

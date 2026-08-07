@@ -25,7 +25,12 @@ Proxmox API credentials come from `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN`
 (already loaded by the devcontainer). `proxmox_ssh_address` is separate — the
 host/IP OpenTofu SSHes to (no scheme, no `:8006` port) to upload the
 vendor-data snippet that installs `qemu-guest-agent`, usually the same host as
-`PROXMOX_VE_ENDPOINT`. `iso_datastore_id` must support both the `import` and
+`PROXMOX_VE_ENDPOINT`. SSH connects as the dedicated `tofu` PAM user with the
+`~/.ssh/id_ed25519_tofu` key — the same PVE-ops account this project's
+`kube-examples` consumer repo already provisions (see its
+`live/proxmox/README.md`, "One-time: user and token setup"); override
+`proxmox_ssh_user`/`proxmox_ssh_key_file` if yours differs. `iso_datastore_id`
+must support both the `import` and
 `snippets` content types (PVE directory-backed storage typically supports
 both, but `snippets` may need enabling separately — check under
 Datacenter → Storage → your datastore → Content). `os_image_url` defaults to

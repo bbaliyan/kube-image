@@ -10,15 +10,15 @@ variable "proxmox_node" {
 }
 
 variable "proxmox_ssh_user" {
-  description = "PAM (Linux) user on the Proxmox host that bpg/proxmox connects as via SSH to upload the vendor-data snippet. Root is the simplest default for a one-time bootstrap step; kube-compute's own consumer examples use a dedicated non-root PAM user for day-to-day cluster provisioning, but that's not required here."
+  description = "PAM (Linux) user on the Proxmox host that bpg/proxmox connects as via SSH to upload the vendor-data snippet. Defaults to the dedicated 'tofu' PAM user this project's Proxmox consumers already provision for bpg/proxmox SSH access (see kube-examples' live/proxmox/README.md, \"One-time: user and token setup\") — PVE root SSH login is not assumed to be enabled or key-authorized, and this project deliberately keeps the PVE-ops key separate from the per-VM guest-access key (ssh_public_key_path below) to limit blast radius."
   type        = string
-  default     = "root"
+  default     = "tofu"
 }
 
 variable "proxmox_ssh_key_file" {
-  description = "SSH private key for proxmox_ssh_user, used only for the snippet upload. Defaults to the same key kube-examples' devcontainer already mounts and bpg/proxmox already uses for cloud-init/vendor-data snippet uploads elsewhere in this project."
+  description = "SSH private key for proxmox_ssh_user, used only for the snippet upload. Defaults to the same PVE-ops key (distinct from the guest-access key below) kube-examples' devcontainer already mounts and bpg/proxmox already uses for cloud-init/vendor-data snippet uploads elsewhere in this project."
   type        = string
-  default     = "~/.ssh/id_ed25519"
+  default     = "~/.ssh/id_ed25519_tofu"
 }
 
 variable "proxmox_ssh_address" {
@@ -73,7 +73,7 @@ variable "ssh_username" {
 }
 
 variable "ssh_public_key_path" {
-  description = "Path to the SSH public key authorized for ssh_username via the seed template's cloud-init user_account block. Must correspond to the private key packer/proxmox/variables.pkr.hcl's ssh_private_key_file points at."
+  description = "Path to the SSH public key authorized for ssh_username via the seed template's cloud-init user_account block. Defaults to this project's dedicated guest-access key (distinct from proxmox_ssh_key_file's PVE-ops key above) — same key kube-compute's own node-bootstrap/Ansible already uses to reach cluster VMs. Must correspond to the private key packer/proxmox/variables.pkr.hcl's ssh_private_key_file points at."
   type        = string
-  default     = "~/.ssh/id_ed25519.pub"
+  default     = "~/.ssh/id_ed25519_kube_cluster.pub"
 }
