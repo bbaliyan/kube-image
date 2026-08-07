@@ -89,6 +89,25 @@ stale, already-expired token). Building outside the devcontainer, or without
 (commented-out examples are in `proxmox.auto.pkrvars.hcl.example`), then run
 `packer build .` directly.
 
+## Pruning old builds
+
+Every `packer build` leaves the previous one's template around — Packer has
+no build history or artifact retention of its own (no `packer destroy`).
+`prune-images.sh` finds every VM tagged `kube-image;template` on a node,
+keeps the N most recent (by the build date embedded in the name), and
+destroys the rest. It never touches the seed (tagged `seed-template`, not
+`template`) or anything not built by this repo.
+
+```bash
+./prune-images.sh --node t630 --dry-run   # see what would be destroyed
+./prune-images.sh --node t630             # keeps 3 by default, asks to confirm
+./prune-images.sh --node t630 --keep 5 --yes   # non-interactive
+```
+
+Talks to the Proxmox API directly (no SSH needed, unlike the seed step
+above) — same `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN` the rest of this
+repo uses.
+
 ## Validating without a live Proxmox connection
 
 ```bash
