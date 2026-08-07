@@ -4,7 +4,6 @@
   "name": "kube-image",
 
   "initializeCommand": "mkdir -p ~/.ssh ~/.kube-compute",
-  "postStartCommand": "mkdir -p .vscode && cp /usr/share/kube-devenv/tasks.json .vscode/tasks.json",
   "postCreateCommand": "printf '%s\\n' 'test -f /root/.kube-compute/proxmox && source /root/.kube-compute/proxmox' 'test -f /root/.kube-compute/proxmox-endpoint && source /root/.kube-compute/proxmox-endpoint' > /etc/kube-compute-env.sh && grep -q 'kube-compute-env.sh' ~/.bashrc || echo 'source /etc/kube-compute-env.sh' >> ~/.bashrc",
 
   "mounts": [

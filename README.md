@@ -20,6 +20,16 @@ A build produces a Proxmox VM template named
 `proxmox_template_vm_id` variable (its numeric Proxmox VM ID). The name is
 documentation only — kube-compute performs no compatibility check against it.
 
+## Proxmox credentials
+
+The devcontainer sources `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN` from
+`~/.kube-compute/` automatically (see `.devcontainer/devcontainer.json`), but the
+API token is short-lived (8h). Refresh it with `kube-proxmox-login` — a plain
+shell command, also available as the "Proxmox Login" VS Code task — before
+running `tofu apply` in `packer/proxmox/seed/` or a Packer build if it's expired.
+No cluster-selection step needed here (unlike `kube-compute`'s `kube-cloud-login`)
+— kube-image only ever talks to Proxmox.
+
 ## Building
 
 Requires a one-time seed AlmaLinux 10 Proxmox template — see

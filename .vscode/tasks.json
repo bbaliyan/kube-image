@@ -1,0 +1,13 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "$(key) Proxmox Login",
+      "detail": "Refresh the short-lived Proxmox API token (8h TTL). Run before 'tofu apply' in packer/proxmox/seed/ or a Packer build if PROXMOX_VE_API_TOKEN has expired.",
+      "type": "shell",
+      "command": "kube-proxmox-login",
+      "presentation": { "reveal": "always", "panel": "dedicated" },
+      "problemMatcher": []
+    }
+  ]
+}
