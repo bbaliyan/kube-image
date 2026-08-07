@@ -7,10 +7,11 @@ AlmaLinux 10 template.
 
 kube-image clones from an existing AlmaLinux 10 Proxmox template rather than
 installing from ISO. Create it once per Proxmox cluster with the automated
-`seed/` OpenTofu config — no manual Proxmox UI or `qm` commands:
+`seed/` OpenTofu config (a sibling of this directory, `packer/proxmox/seed/`)
+— no manual Proxmox UI or `qm` commands:
 
 ```bash
-# From the kube-image repo root:
+# From this directory (packer/proxmox/):
 cd seed
 tofu init
 tofu apply \
