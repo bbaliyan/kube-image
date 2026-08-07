@@ -32,11 +32,12 @@ not a manual step).
 cd packer/proxmox
 cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
 # edit proxmox.auto.pkrvars.hcl: proxmox_node, seed_template_vm_id, disk_datastore_id,
-# k8s_version, cilium_version, argocd_version — Proxmox URL/API token are already
-# set (PKR_VAR_proxmox_url/proxmox_api_token_id/proxmox_api_token_secret, derived
-# from PROXMOX_VE_ENDPOINT/PROXMOX_VE_API_TOKEN by the devcontainer)
+# k8s_version, cilium_version, argocd_version — Proxmox URL/API token don't need
+# editing, ./build.sh derives them fresh from PROXMOX_VE_ENDPOINT/PROXMOX_VE_API_TOKEN
+# on every run (see packer/proxmox/README.md's "Building" section for why a plain
+# 'packer build' isn't used directly)
 packer init .
-packer build .
+./build.sh .
 ```
 
 ## Consuming a built image

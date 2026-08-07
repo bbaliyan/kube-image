@@ -74,17 +74,20 @@ cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
 # edit proxmox.auto.pkrvars.hcl: proxmox_node, seed_template_vm_id,
 # disk_datastore_id, k8s_version, cilium_version, argocd_version
 packer init .
-packer build .
+./build.sh .
 ```
 
 `proxmox_url`/`proxmox_api_token_id`/`proxmox_api_token_secret` don't need
-editing — inside the devcontainer they're already set as
-`PKR_VAR_proxmox_url`/`PKR_VAR_proxmox_api_token_id`/
-`PKR_VAR_proxmox_api_token_secret`, derived from the same
-`PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN` the seed step above uses (see
-`.devcontainer/write-env.sh`). Building outside the devcontainer? Set those
-three explicitly in `proxmox.auto.pkrvars.hcl` instead (commented-out
-examples are in `proxmox.auto.pkrvars.hcl.example`).
+editing — `build.sh` derives them fresh from `PROXMOX_VE_ENDPOINT`/
+`PROXMOX_VE_API_TOKEN` immediately before every build (a thin wrapper around
+`packer build`; see the comment at the top of `build.sh` for why a plain
+`packer build` isn't used directly — the devcontainer's own automatic
+derivation only re-runs on a new shell, so refreshing the token with
+`kube-proxmox-login` and reusing the same terminal can otherwise build with a
+stale, already-expired token). Building outside the devcontainer, or without
+`build.sh`? Set those three explicitly in `proxmox.auto.pkrvars.hcl` instead
+(commented-out examples are in `proxmox.auto.pkrvars.hcl.example`), then run
+`packer build .` directly.
 
 ## Validating without a live Proxmox connection
 
