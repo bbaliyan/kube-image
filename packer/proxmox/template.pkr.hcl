@@ -33,19 +33,27 @@ source "proxmox-clone" "rke2" {
 
   cores  = 2
   memory = 2048
+  os     = "l26"
 
   # Must match the seed template's own scsi_hardware (packer/proxmox/seed/main.tf,
   # "virtio-scsi-single") — full_clone copies the disk image but Packer's own VM
-  # config otherwise defaults the controller to "lsi", a mismatch that produced a
-  # kernel panic ("Attempted to kill init!") during boot on a real bake: iothread
-  # is only valid under virtio-scsi-single, so the disk's iothread setting gets
-  # silently ignored under the wrong controller, corrupting I/O.
+  # config otherwise defaults the controller to "lsi" (packer-plugin-proxmox's
+  # builder/proxmox/common/config.go), a mismatch that produced a kernel panic
+  # ("Attempted to kill init!") during boot on a real bake: the plugin's own
+  # validation rejects io_thread=true under any controller but virtio-scsi-single,
+  # so the seed's inherited iothread setting got silently dropped by Proxmox at
+  # clone time under the wrong controller, corrupting I/O.
   scsi_controller = "virtio-scsi-single"
 
+  # Matches kube-compute's proven proxmox_virtual_environment_vm disk block
+  # (proxmox-control-plane/main.tf) now that scsi_controller makes io_thread valid.
   disks {
     disk_size    = "20G"
     storage_pool = var.disk_datastore_id
     type         = "scsi"
+    io_thread    = true
+    discard      = true
+    ssd          = true
   }
 
   network_adapters {
