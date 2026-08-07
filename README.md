@@ -12,14 +12,6 @@ launch-time concern (`kube-compute`'s `node-bootstrap` module), not baked here.
 - **AWS** — not yet supported.
 - **Azure** — not supported (kube-compute has no viable Ansible transport for it yet).
 
-## Consuming a built image
-
-A build produces a Proxmox VM template named
-`kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`. Point
-`kube-compute`'s `proxmox-control-plane`/`proxmox-node-pool` modules at it via the
-`proxmox_template_vm_id` variable (its numeric Proxmox VM ID). The name is
-documentation only — kube-compute performs no compatibility check against it.
-
 ## Proxmox credentials
 
 The devcontainer sources `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN` from
@@ -43,6 +35,14 @@ cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
 packer init .
 packer build .
 ```
+
+## Consuming a built image
+
+A build produces a Proxmox VM template named
+`kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`. Point
+`kube-compute`'s `proxmox-control-plane`/`proxmox-node-pool` modules at it via the
+`proxmox_template_vm_id` variable (its numeric Proxmox VM ID). The name is
+documentation only — kube-compute performs no compatibility check against it.
 
 ## Development
 
