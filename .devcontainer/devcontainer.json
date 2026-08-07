@@ -4,7 +4,7 @@
   "name": "kube-image",
 
   "initializeCommand": "mkdir -p ~/.ssh ~/.kube-compute",
-  "postCreateCommand": "printf '%s\\n' 'test -f /root/.kube-compute/proxmox && source /root/.kube-compute/proxmox' 'test -f /root/.kube-compute/proxmox-endpoint && source /root/.kube-compute/proxmox-endpoint' > /etc/kube-compute-env.sh && grep -q 'kube-compute-env.sh' ~/.bashrc || echo 'source /etc/kube-compute-env.sh' >> ~/.bashrc",
+  "postCreateCommand": "bash .devcontainer/write-env.sh",
 
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,readonly",

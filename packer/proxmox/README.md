@@ -71,10 +71,20 @@ working directory, not the repo root.
 
 ```bash
 cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
-# edit proxmox.auto.pkrvars.hcl
+# edit proxmox.auto.pkrvars.hcl: proxmox_node, seed_template_vm_id,
+# disk_datastore_id, k8s_version, cilium_version, argocd_version
 packer init .
 packer build .
 ```
+
+`proxmox_url`/`proxmox_api_token_id`/`proxmox_api_token_secret` don't need
+editing — inside the devcontainer they're already set as
+`PKR_VAR_proxmox_url`/`PKR_VAR_proxmox_api_token_id`/
+`PKR_VAR_proxmox_api_token_secret`, derived from the same
+`PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN` the seed step above uses (see
+`.devcontainer/write-env.sh`). Building outside the devcontainer? Set those
+three explicitly in `proxmox.auto.pkrvars.hcl` instead (commented-out
+examples are in `proxmox.auto.pkrvars.hcl.example`).
 
 ## Validating without a live Proxmox connection
 

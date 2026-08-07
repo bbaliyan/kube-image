@@ -31,7 +31,10 @@ not a manual step).
 ```bash
 cd packer/proxmox
 cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
-# edit proxmox.auto.pkrvars.hcl: seed_template_vm_id, k8s_version, cilium_version, argocd_version
+# edit proxmox.auto.pkrvars.hcl: proxmox_node, seed_template_vm_id, disk_datastore_id,
+# k8s_version, cilium_version, argocd_version — Proxmox URL/API token are already
+# set (PKR_VAR_proxmox_url/proxmox_api_token_id/proxmox_api_token_secret, derived
+# from PROXMOX_VE_ENDPOINT/PROXMOX_VE_API_TOKEN by the devcontainer)
 packer init .
 packer build .
 ```

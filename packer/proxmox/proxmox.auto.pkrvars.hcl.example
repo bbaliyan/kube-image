@@ -1,6 +1,12 @@
-proxmox_url                      = "https://pve.example.com:8006/api2/json"
-proxmox_api_token_id             = "root@pam!packer"
-proxmox_api_token_secret         = "REPLACE_ME"
+# proxmox_url / proxmox_api_token_id / proxmox_api_token_secret are NOT listed
+# here — inside the devcontainer they're auto-populated as PKR_VAR_proxmox_url
+# / PKR_VAR_proxmox_api_token_id / PKR_VAR_proxmox_api_token_secret, derived
+# from PROXMOX_VE_ENDPOINT/PROXMOX_VE_API_TOKEN by .devcontainer/write-env.sh.
+# Uncomment and set them here only if building outside that devcontainer:
+# proxmox_url               = "https://pve.example.com:8006/api2/json"
+# proxmox_api_token_id      = "root@pam!packer"
+# proxmox_api_token_secret  = "REPLACE_ME"
+
 proxmox_node                     = "pve"
 seed_template_vm_id              = 9000
 disk_datastore_id                = "local-zfs"

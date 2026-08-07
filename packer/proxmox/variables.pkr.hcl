@@ -2,17 +2,17 @@
 
 variable "proxmox_url" {
   type        = string
-  description = "Proxmox VE API URL, e.g. https://pve.example.com:8006/api2/json."
+  description = "Proxmox VE API URL, e.g. https://pve.example.com:8006/api2/json. Auto-populated from PROXMOX_VE_ENDPOINT by the devcontainer's PKR_VAR_proxmox_url export (.devcontainer/write-env.sh) — set explicitly only outside that devcontainer."
 }
 
 variable "proxmox_api_token_id" {
   type        = string
-  description = "Proxmox API token ID, e.g. root@pam!packer."
+  description = "Proxmox API token ID, e.g. root@pam!packer. Auto-populated from PROXMOX_VE_API_TOKEN by the devcontainer's PKR_VAR_proxmox_api_token_id export (.devcontainer/write-env.sh) — set explicitly only outside that devcontainer."
 }
 
 variable "proxmox_api_token_secret" {
   type        = string
-  description = "Proxmox API token secret."
+  description = "Proxmox API token secret. Auto-populated from PROXMOX_VE_API_TOKEN by the devcontainer's PKR_VAR_proxmox_api_token_secret export (.devcontainer/write-env.sh) — set explicitly only outside that devcontainer."
   sensitive   = true
 }
 
