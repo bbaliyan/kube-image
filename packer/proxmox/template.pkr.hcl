@@ -16,6 +16,10 @@ locals {
   build_date       = formatdate("YYYY-MM-DD", timestamp())
   k8s_version_safe = replace(var.k8s_version, "+", "-")
   image_name       = "kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}"
+  # Proxmox tags allow only [A-Za-z0-9_-] — stricter than VM/template names
+  # (which allow dots, confirmed working in image_name above). k8s_version_safe
+  # still has dots (e.g. "v1.36.1-rke2r1"), so tags need their own value.
+  k8s_version_tag = replace(local.k8s_version_safe, ".", "-")
 }
 
 source "proxmox-clone" "rke2" {
@@ -35,7 +39,7 @@ source "proxmox-clone" "rke2" {
   # tag so both are findable together in the Proxmox UI, plus "template" (the
   # seed's own tag is "seed-template" — distinct so the two are never confused)
   # and the sanitized k8s_version for quick filtering without opening the VM.
-  tags = "kube-image;template;${local.k8s_version_safe}"
+  tags = "kube-image;template;${local.k8s_version_tag}"
 
   cores  = 2
   memory = 2048
