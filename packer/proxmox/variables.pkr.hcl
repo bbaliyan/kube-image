@@ -37,6 +37,12 @@ variable "proxmox_insecure_skip_tls_verify" {
   description = "Skip TLS certificate verification for the Proxmox API — matches seed/variables.tf's proxmox_insecure default (true for a self-signed PVE cert, the common case)."
 }
 
+variable "cpu_type" {
+  type        = string
+  default     = "host"
+  description = "QEMU CPU model for the build/clone VM. Defaults to 'host' (exactly what the physical Proxmox node supports, no claimed-but-unbacked CPUID features) — a named model like kube-compute's 'x86-64-v2-AES' can claim features KVM can't actually back on some real hardware (confirmed on a Dell PowerEdge T630/older Xeon: produced the same very-early kernel panic Proxmox's own 'kvm64' default does). Live-migration portability across hosts doesn't apply here — this is a bake-only VM, never migrated — so 'host' has no real downside for this use case; override only if your build host's exact CPU model matters to you for some other reason."
+}
+
 variable "ssh_username" {
   type        = string
   default     = "almalinux"

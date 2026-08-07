@@ -9,6 +9,12 @@ variable "proxmox_node" {
   type        = string
 }
 
+variable "cpu_type" {
+  description = "QEMU CPU model for the seed VM. Defaults to 'host' (exactly what the physical Proxmox node supports) rather than kube-compute's own 'x86-64-v2-AES' default — that named QEMU model can claim CPUID features KVM can't actually back on some real hardware, confirmed on a Dell PowerEdge T630/older Xeon (produced the same very-early kernel panic Proxmox's 'kvm64' default does). This VM never actually boots (started=false below), but kept consistent with ../variables.pkr.hcl's cpu_type for the Packer clone that does."
+  type        = string
+  default     = "host"
+}
+
 variable "proxmox_ssh_user" {
   description = "PAM (Linux) user on the Proxmox host that bpg/proxmox connects as via SSH to upload the vendor-data snippet. Defaults to the dedicated 'tofu' PAM user this project's Proxmox consumers already provision for bpg/proxmox SSH access (see kube-examples' live/proxmox/README.md, \"One-time: user and token setup\") — PVE root SSH login is not assumed to be enabled or key-authorized, and this project deliberately keeps the PVE-ops key separate from the per-VM guest-access key (ssh_public_key_path below) to limit blast radius."
   type        = string

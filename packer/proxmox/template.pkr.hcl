@@ -35,15 +35,22 @@ source "proxmox-clone" "rke2" {
   memory = 2048
   os     = "l26"
 
-  # Matches kube-compute's proxmox-control-plane vm_cpu_type default exactly.
   # Proxmox's own CPU-type default ("kvm64") emulates a baseline pre-SSE4.2 CPU;
-  # AlmaLinux 10/RHEL10 userspace assumes an x86-64-v2 baseline, and booting under
-  # kvm64 produced a very early kernel panic ("Attempted to kill init!", a SIGSEGV
-  # inside systemd's own startup, present on the seed's own first boot too — not
-  # something the scsi_controller/disk settings below caused or fixed) on a real
-  # bake — confirmed by cross-checking kube-compute's proven, already-working VM
-  # config rather than guessing.
-  cpu_type = "x86-64-v2-AES"
+  # AlmaLinux 10/RHEL10 userspace assumes more than that's actually there, and
+  # booting under kvm64 produced a very early kernel panic ("Attempted to kill
+  # init!", a SIGSEGV inside systemd's own startup, present on the seed's own
+  # first boot too — not something the scsi_controller/disk settings below caused
+  # or fixed) on a real bake. kube-compute's proxmox-control-plane defaults to the
+  # named QEMU model "x86-64-v2-AES" instead (for live-migration portability across
+  # a running cluster's hosts) — tried that here first, but it produced the
+  # identical panic on real hardware (a Dell PowerEdge T630/older Xeon): the named
+  # model can claim CPUID features KVM can't actually back on that silicon,
+  # producing the same illegal-instruction-flavored crash kvm64 did. var.cpu_type
+  # defaults to "host" instead — always exactly what the physical CPU supports,
+  # no claimed-but-unbacked features possible. Live-migration portability doesn't
+  # apply here: this is a bake-only VM, never migrated. Override if your build
+  # host's exact CPU model matters to you for some other reason.
+  cpu_type = var.cpu_type
 
   # Must match the seed template's own scsi_hardware (packer/proxmox/seed/main.tf,
   # "virtio-scsi-single") — full_clone copies the disk image but Packer's own VM
