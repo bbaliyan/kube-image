@@ -98,7 +98,7 @@ build {
   sources = ["source.proxmox-clone.rke2"]
 
   provisioner "ansible" {
-    playbook_file = "../../ansible/playbook.yml"
+    playbook_file = "../../ansible/playbook-proxmox.yml"
     user          = var.ssh_username
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",

@@ -1,8 +1,9 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
-- name: RKE2 node bake (AlmaLinux 10)
+- name: RKE2 node bake (AlmaLinux 10, Proxmox)
   hosts: all
   gather_facts: true
   become: true
   roles:
-    - rke2_bake
+    - rke2_bake_common
+    - rke2_bake_proxmox

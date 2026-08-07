@@ -1,10 +1,18 @@
 # kube-image
 
-Packer templates and a shared Ansible bake role that pre-build RKE2 node images —
+Packer templates and Ansible bake roles that pre-build RKE2 node images —
 OS prep, SELinux/kernel-module prerequisites, and RKE2 binaries baked in — so
 `kube-compute`'s node modules launch from a ready image instead of bootstrapping
 from scratch on every apply. Per-cluster identity, secrets, and join logic stay a
 launch-time concern (`kube-compute`'s `node-bootstrap` module), not baked here.
+
+Ansible is split into a provider-agnostic `rke2_bake_common` role (OS prep,
+RKE2 install, template cleanup — the same regardless of provider) plus a thin
+`rke2_bake_<provider>` role for whatever's genuinely provider-specific (e.g.
+`rke2_bake_proxmox`'s hot-vCPU udev rule). Each provider gets its own Packer
+template and its own playbook (`ansible/playbook-<provider>.yml`) that
+includes both roles — the provider is known at build-invocation time, so
+there's no runtime `node_provider` conditional anywhere.
 
 ## Providers
 
@@ -57,5 +65,5 @@ a live Proxmox connection:
 
 ```bash
 cd packer/proxmox && packer fmt -check . && packer validate .
-cd ../../ansible && ansible-playbook --syntax-check -i localhost, playbook.yml
+cd ../../ansible && ansible-playbook --syntax-check -i localhost, playbook-proxmox.yml
 ```

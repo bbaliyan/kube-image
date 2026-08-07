@@ -1,5 +1,11 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
+# Provider-agnostic bake tasks — same AlmaLinux 10 base image, same OS-prep/
+# RKE2-install/template-cleanup steps regardless of which provider's Packer
+# template invokes this role. Provider-specific tasks (e.g. Proxmox's hot-vCPU
+# udev rule) live in a separate rke2_bake_<provider> role instead, included
+# alongside this one by that provider's own playbook — see
+# ansible/playbook-proxmox.yml for the Proxmox example.
 
 - name: os-prep | inotify limits
   ansible.builtin.copy:
@@ -11,12 +17,6 @@
 - name: os-prep | apply inotify limits immediately
   ansible.builtin.command: sysctl -p /etc/sysctl.d/99-rke2-inotify.conf
   when: inotify_conf.changed
-
-- name: os-prep | hot-added vCPU online rule (Proxmox/KVM guest)
-  ansible.builtin.copy:
-    src: 80-hotplug-cpu-online.rules
-    dest: /etc/udev/rules.d/80-hotplug-cpu-online.rules
-    mode: "0644"
 
 - name: os-prep | permanently quiesce background dnf/rpm-lock holders
   ansible.builtin.systemd:
@@ -97,12 +97,6 @@
       fi
       sysctl --system
     creates: /etc/modules-load.d/rke2.conf
-
-# No install/enable task for qemu-guest-agent here — the seed template's own
-# cloud-init vendor-data (packer/proxmox/seed/main.tf) already installs and
-# enables it, inherited by every full_clone before Ansible ever connects
-# (confirmed on a real bake: this task showed "ok", not "changed" — pure
-# no-op overhead, removed).
 
 - name: os-prep | label the local-path-provisioner directory for container write access
   ansible.builtin.shell:
