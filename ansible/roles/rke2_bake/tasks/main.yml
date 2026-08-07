@@ -35,10 +35,8 @@
 # section). Independent copy of the dnf-update-loop logic, not shared with
 # node-os-patch's role — two separate public repos, matching existing precedent
 # (rke2-selinux's own retry logic carries the same "extract when a third copy
-# shows up" note). The reboot itself is handled below, mid-role, by an
-# ansible.builtin.reboot task gated on the needs-restarting check — this runs
-# before the kernel-module install task so that install targets the post-update
-# kernel.
+# shows up" note). The reboot itself is handled below, mid-role, before the
+# kernel-module install task so that install targets the post-update kernel.
 - name: os-prep | run dnf update -y (retry + self-heal on lock contention)
   ansible.builtin.shell:
     cmd: |
@@ -52,32 +50,29 @@
       done
   changed_when: true
 
-- name: os-prep | install dnf-utils for needs-restarting
-  ansible.builtin.dnf:
-    name: dnf-utils
-    state: present
-
-- name: os-prep | check whether a reboot is needed
-  ansible.builtin.command: dnf needs-restarting -r
-  register: bake_reboot_check
-  failed_when: false
-  changed_when: false
-
-- name: os-prep | record whether a reboot is needed
-  ansible.builtin.set_fact:
-    bake_reboot_needed: "{{ bake_reboot_check.rc == 1 }}"
-
-- name: os-prep | reboot if the OS update requires it
+# Unconditional, not gated on a needs-restarting check: a full dnf update
+# against a base cloud image (which can be weeks/months stale) needs a reboot
+# in practice on virtually every bake anyway (kernel/glibc bumps are near-
+# universal), so installing dnf-utils and running the check just to confirm
+# something already near-certain cost more build time on average than it
+# saved — measured on a real bake, both the extra package install and the
+# check itself were pure overhead every single time.
+- name: os-prep | reboot after the OS update
   ansible.builtin.reboot:
     reboot_timeout: 600
-  when: bake_reboot_needed
 
+# dnf update above already left a fresh cache, and no repo has changed since
+# — a second dnf makecache here was pure duplicate metadata sync (confirmed
+# wasted time on a real bake). The rke2-selinux install below DOES need one:
+# the rancher-rke2-common repo is added between here and there.
 - name: os-prep | install ca-certificates and curl, load br_netfilter/overlay
   ansible.builtin.shell:
     cmd: |
       set -euo pipefail
-      dnf makecache
-      dnf install -y ca-certificates curl
+      # ca-certificates/curl and kernel-modules-extra-matched are independent
+      # package sets — one dnf transaction instead of two avoids resolving
+      # dependencies twice.
+      dnf install -y ca-certificates curl kernel-modules-extra-matched
       # AlmaLinux 10's minimal image ships only kernel-modules-core, which excludes
       # nft_compat (the iptables-nft translation shim). Cilium's default VXLAN mode
       # installs its tunnel-accept rule via classic iptables syntax, which needs
@@ -85,7 +80,6 @@
       # created pods become unreachable. Use the unversioned "-matched" meta-package,
       # not a pinned NVR: the BaseOS repo only keeps the subpackage for the latest
       # kernel, so a pinned request can match nothing for the image's running kernel.
-      dnf install -y kernel-modules-extra-matched
       modprobe nft_compat
       # RHEL10 kernels (6.12+) dropped br_netfilter — bridged traffic is filtered
       # natively via nftables bridge hooks, so there's no module to load and no
@@ -104,16 +98,11 @@
       sysctl --system
     creates: /etc/modules-load.d/rke2.conf
 
-- name: os-prep | install and enable qemu-guest-agent
-  ansible.builtin.dnf:
-    name: qemu-guest-agent
-    state: present
-
-- name: os-prep | enable qemu-guest-agent
-  ansible.builtin.systemd:
-    name: qemu-guest-agent
-    state: started
-    enabled: true
+# No install/enable task for qemu-guest-agent here — the seed template's own
+# cloud-init vendor-data (packer/proxmox/seed/main.tf) already installs and
+# enables it, inherited by every full_clone before Ansible ever connects
+# (confirmed on a real bake: this task showed "ok", not "changed" — pure
+# no-op overhead, removed).
 
 - name: os-prep | label the local-path-provisioner directory for container write access
   ansible.builtin.shell:
