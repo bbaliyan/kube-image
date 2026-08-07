@@ -35,14 +35,24 @@ source "proxmox-clone" "rke2" {
   memory = 2048
   os     = "l26"
 
+  # Matches kube-compute's proxmox-control-plane vm_cpu_type default exactly.
+  # Proxmox's own CPU-type default ("kvm64") emulates a baseline pre-SSE4.2 CPU;
+  # AlmaLinux 10/RHEL10 userspace assumes an x86-64-v2 baseline, and booting under
+  # kvm64 produced a very early kernel panic ("Attempted to kill init!", a SIGSEGV
+  # inside systemd's own startup, present on the seed's own first boot too — not
+  # something the scsi_controller/disk settings below caused or fixed) on a real
+  # bake — confirmed by cross-checking kube-compute's proven, already-working VM
+  # config rather than guessing.
+  cpu_type = "x86-64-v2-AES"
+
   # Must match the seed template's own scsi_hardware (packer/proxmox/seed/main.tf,
   # "virtio-scsi-single") — full_clone copies the disk image but Packer's own VM
   # config otherwise defaults the controller to "lsi" (packer-plugin-proxmox's
-  # builder/proxmox/common/config.go), a mismatch that produced a kernel panic
-  # ("Attempted to kill init!") during boot on a real bake: the plugin's own
-  # validation rejects io_thread=true under any controller but virtio-scsi-single,
-  # so the seed's inherited iothread setting got silently dropped by Proxmox at
-  # clone time under the wrong controller, corrupting I/O.
+  # builder/proxmox/common/config.go). The plugin's own validation rejects
+  # io_thread=true under any controller but virtio-scsi-single, so without this the
+  # seed's inherited iothread disk setting gets silently dropped by Proxmox at
+  # clone time — a real, separate correctness issue, kept even though it turned
+  # out not to be what caused the panic above.
   scsi_controller = "virtio-scsi-single"
 
   # Matches kube-compute's proven proxmox_virtual_environment_vm disk block

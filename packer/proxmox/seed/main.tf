@@ -56,8 +56,15 @@ resource "proxmox_virtual_environment_vm" "seed" {
     enabled = true
   }
 
+  # Matches kube-compute's proxmox-control-plane vm_cpu_type default exactly.
+  # Proxmox's own CPU-type default ("kvm64") emulates a baseline pre-SSE4.2 CPU;
+  # AlmaLinux 10/RHEL10 userspace assumes an x86-64-v2 baseline, and booting under
+  # kvm64 produced a very early kernel panic ("Attempted to kill init!", a SIGSEGV
+  # inside systemd's own startup) on a real bake — confirmed by cross-checking
+  # kube-compute's proven, already-working VM config rather than guessing.
   cpu {
     cores = 1
+    type  = "x86-64-v2-AES"
   }
 
   memory {
