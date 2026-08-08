@@ -9,11 +9,14 @@
 # naming/tags and the provisioner (a different Ansible playbook) differ.
 #
 # Unlike the existing build, this template does NOT get RKE2 fully installed.
-# It stages CAPI + CAPMOX + CAPRKE2 install manifests
-# (/opt/kube-compute/manifests/capi-install.yaml) and RKE2's own air-gap
-# release artifacts (/opt/install.sh + /opt/rke2-artifacts/*) for
-# cluster-autoscaler-managed CAPI Machines to consume via CAPRKE2's own
-# boot-time install.sh re-invocation — see ansible/roles/rke2_bake_autoscaler_worker.
+# It stages RKE2's own air-gap release artifacts (/opt/install.sh +
+# /opt/rke2-artifacts/*) for CAPRKE2-managed CAPI Machines to consume via
+# CAPRKE2's own boot-time install.sh re-invocation — see
+# ansible/roles/rke2_bake_autoscaler_worker. It does NOT stage
+# capi-install.yaml (the CAPI/CAPMOX/CAPRKE2 install manifest) — that's only
+# ever applied by bootstrap.sh on the control-plane/genesis node, which boots
+# from template.pkr.hcl's "rke2-proxmox" image, not this one — see that
+# file's build block for where it's staged instead.
 
 locals {
   autoscaler_build_date       = formatdate("YYYY-MM-DD", timestamp())
@@ -83,7 +86,6 @@ build {
     user          = var.ssh_username
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
-      "--extra-vars", "rendered_capi_manifests_dir=${var.rendered_capi_manifests_dir}",
       "--extra-vars", "rendered_rke2_artifacts_dir=${var.rendered_rke2_artifacts_dir}",
     ]
   }

@@ -8,18 +8,15 @@
 # that's the entire point of this being the lighter image variant (see
 # packer/proxmox/autoscaler-worker.pkr.hcl and this project's plan doc for
 # the full rationale).
-
-- name: Create CAPI manifest directory
-  ansible.builtin.file:
-    path: /opt/kube-compute/manifests
-    state: directory
-    mode: "0700"
-
-- name: Copy rendered CAPI install manifest
-  ansible.builtin.copy:
-    src: "{{ rendered_capi_manifests_dir }}/capi-install.yaml"
-    dest: /opt/kube-compute/manifests/capi-install.yaml
-    mode: "0600"
+#
+# Does NOT stage capi-install.yaml (the CAPI/CAPMOX/CAPRKE2 install
+# manifest) — that manifest is only ever `kubectl apply`'d by bootstrap.sh on
+# the control-plane/genesis node, which boots from the rke2-proxmox image
+# (playbook-proxmox.yml / rke2_bake_common), never from this worker image.
+# It used to be staged here too, which meant any cluster with
+# cluster_autoscaler_enabled=true failed bootstrap.sh entirely on the
+# control-plane node (the file it was told to apply didn't exist there) —
+# see rke2_bake_common/tasks/main.yml for where this is staged now.
 
 - name: Create RKE2 air-gap artifact directory
   ansible.builtin.file:

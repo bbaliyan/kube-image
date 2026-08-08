@@ -75,18 +75,26 @@ variable "rendered_manifests_dir" {
   description = "Local directory (on the Packer build host) containing the pre-rendered cilium.yaml/00-argocd.yaml to copy onto the template. Always set by build.sh (a fresh mktemp -d per build, rendered via helm template immediately before invoking packer build) — not meant to be set by hand; there is no default so a bare 'packer build' (bypassing build.sh) fails loudly instead of silently baking a stale or missing manifest."
 }
 
+variable "rendered_capi_manifests_dir" {
+  type        = string
+  default     = ""
+  description = "Local directory (on the Packer build host) containing the pre-rendered capi-install.yaml — the concatenated 'clusterctl generate provider' output for CAPI core + CAPMOX + CAPRKE2 (bootstrap + control-plane) — to copy onto the rke2-proxmox (control-plane) template. Always set by build.sh when building that target (a fresh mktemp -d per build). bootstrap.sh applies this manifest from the control-plane/genesis node, which boots from THIS template, not the proxmox-autoscaler-worker one — that build never sets or uses this variable. Carries an empty-string default (unlike rendered_manifests_dir) because Packer evaluates every variable in every *.pkr.hcl file in this directory regardless of which build a given 'packer build -only=...' invocation actually runs, so the proxmox-autoscaler-worker-only path must keep validating without this ever being set; the rke2_bake_common Ansible role's copy task still fails loudly on a nonexistent copy src if this is left empty while actually building the rke2-proxmox target."
+}
+
 # ---- proxmox-autoscaler-worker build target only ---------------------------
-# The four variables below are consumed exclusively by autoscaler-worker.pkr.hcl's
+# The three variables below are consumed exclusively by autoscaler-worker.pkr.hcl's
 # "proxmox-autoscaler-worker" build. Unlike k8s_version/cilium_version/rendered_manifests_dir
 # above (required, no default — the existing rke2-proxmox build always needs
 # them), these carry an empty-string default: Packer evaluates every variable
 # in every *.pkr.hcl file in this directory regardless of which build a given
 # 'packer build -only=...' invocation actually runs, so the rke2-proxmox-only
 # path (the common case, and every build before this one) must keep validating
-# without clusterctl, without network access to fetch CAPI/CAPMOX/CAPRKE2
-# versions, and without these ever being set. build.sh only resolves and
-# exports real values for these when it detects an autoscaler-worker build
-# (see build.sh's build_target detection).
+# without these ever being set for ITS OWN provisioner (rke2-proxmox does
+# resolve capi_core_version/capmox_version/caprke2_version too now — see
+# build.sh — but only for rendering capi-install.yaml above, not for these
+# autoscaler-worker-only naming/staging variables). build.sh only resolves
+# rendered_rke2_artifacts_dir when it detects an autoscaler-worker build (see
+# build.sh's build_target detection).
 
 variable "capi_core_version" {
   type        = string
@@ -104,12 +112,6 @@ variable "caprke2_version" {
   type        = string
   default     = ""
   description = "cluster-api-provider-rke2 (CAPRKE2) bootstrap + control-plane provider version, e.g. v0.4.1. Same resolution mechanism and caveat as capi_core_version (platform-versions.yaml key: caprke2Version)."
-}
-
-variable "rendered_capi_manifests_dir" {
-  type        = string
-  default     = ""
-  description = "Local directory (on the Packer build host) containing the pre-rendered capi-install.yaml — the concatenated 'clusterctl generate provider' output for CAPI core + CAPMOX + CAPRKE2 (bootstrap + control-plane) — to copy onto the proxmox-autoscaler-worker template. Always set by build.sh (a fresh mktemp -d per build) when building that target. Defaults to empty (unlike rendered_manifests_dir) because the rke2-proxmox build never uses this variable at all; the rke2_bake_autoscaler_worker Ansible role still fails loudly on a nonexistent copy src if this is left empty while actually building the autoscaler-worker target."
 }
 
 variable "rendered_rke2_artifacts_dir" {

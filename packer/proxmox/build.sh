@@ -33,9 +33,11 @@ fi
 # "rke2-proxmox" and autoscaler-worker.pkr.hcl's "proxmox-autoscaler-worker").
 # This wrapper inspects "$@" for that flag to decide which version-resolution
 # and manifest-render logic below actually needs to run for the target being
-# built — the autoscaler-worker target needs clusterctl + CAPI/CAPMOX/CAPRKE2
-# version pins that the pre-existing rke2-proxmox target never needed and
-# shouldn't be forced to depend on.
+# built — both targets now resolve clusterctl's CAPI/CAPMOX/CAPRKE2 version
+# pins (control-plane to render capi-install.yaml, autoscaler-worker for its
+# own template naming), but only the autoscaler-worker target stages RKE2's
+# own air-gap release artifacts, and only the control-plane target actually
+# writes capi-install.yaml onto the image.
 build_target="control-plane"
 only_flag_given=false
 for arg in "$@"; do
@@ -57,7 +59,7 @@ if ! $only_flag_given; then
   set -- -only=rke2-proxmox.proxmox-clone.rke2 "$@"
 fi
 
-# ---- k8s/Cilium/Argo CD version resolution ---------------------------------
+# ---- k8s/Cilium/Argo CD/CAPI version resolution -----------------------------
 # Same pin kube-compute's component-versions module carries
 # (pinned_platform_repo_url/_revision) — each repo keeps its own copy rather
 # than sharing config across repos, matching how kube-compute's own
@@ -71,11 +73,19 @@ fi
 # effect — see README.md. Already-exported PKR_VAR_* (e.g. a manual override
 # at the shell) still wins over this fetch, since each export below is
 # conditional on the variable being unset.
+#
+# CAPI/CAPMOX/CAPRKE2 pins are now resolved for every build, not just the
+# autoscaler-worker target: the control-plane (rke2-proxmox) target needs
+# them to render capi-install.yaml below (bootstrap.sh applies that manifest
+# from the control-plane/genesis node, which boots from THIS image — not the
+# worker one, so the render has to happen here now, not only for
+# autoscaler-worker). The autoscaler-worker target still needs these purely
+# for its own template name/description (autoscaler-worker.pkr.hcl's
+# autoscaler_image_name) even though it no longer stages capi-install.yaml
+# itself.
 capi_versions_needed=false
-if [ "$build_target" = "autoscaler-worker" ]; then
-  if [ -z "${PKR_VAR_capi_core_version:-}" ] || [ -z "${PKR_VAR_capmox_version:-}" ] || [ -z "${PKR_VAR_caprke2_version:-}" ]; then
-    capi_versions_needed=true
-  fi
+if [ -z "${PKR_VAR_capi_core_version:-}" ] || [ -z "${PKR_VAR_capmox_version:-}" ] || [ -z "${PKR_VAR_caprke2_version:-}" ]; then
+  capi_versions_needed=true
 fi
 
 if [ -z "${PKR_VAR_k8s_version:-}" ] || [ -z "${PKR_VAR_cilium_version:-}" ] || [ -z "${PKR_VAR_argocd_version:-}" ] || $capi_versions_needed; then
@@ -89,18 +99,15 @@ if [ -z "${PKR_VAR_k8s_version:-}" ] || [ -z "${PKR_VAR_cilium_version:-}" ] || 
 
   # CAPI/CAPMOX/CAPRKE2 pins only exist in platform-versions.yaml once
   # kube-platform's own version-pin task lands them (capiCoreVersion/
-  # capmoxVersion/caprke2Version) — only fetched/required here when actually
-  # building the autoscaler-worker target, never for the pre-existing
-  # rke2-proxmox target.
-  if [ "$build_target" = "autoscaler-worker" ]; then
-    : "${PKR_VAR_capi_core_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["capiCoreVersion"])')}"
-    : "${PKR_VAR_capmox_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["capmoxVersion"])')}"
-    : "${PKR_VAR_caprke2_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["caprke2Version"])')}"
-    export PKR_VAR_capi_core_version PKR_VAR_capmox_version PKR_VAR_caprke2_version
-  fi
+  # capmoxVersion/caprke2Version) — fetched/required for every build now
+  # (see the comment above this block for why both targets need them).
+  : "${PKR_VAR_capi_core_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["capiCoreVersion"])')}"
+  : "${PKR_VAR_capmox_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["capmoxVersion"])')}"
+  : "${PKR_VAR_caprke2_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["caprke2Version"])')}"
+  export PKR_VAR_capi_core_version PKR_VAR_capmox_version PKR_VAR_caprke2_version
 fi
 
-# ---- CAPI/CAPMOX/CAPRKE2 install manifest render (autoscaler-worker only) -
+# ---- CAPI/CAPMOX/CAPRKE2 install manifest render (control-plane only) -----
 # Four separate 'clusterctl generate provider' invocations — a single
 # combined call across --core/--infrastructure/--bootstrap/--control-plane is
 # unconfirmed to exist (no clusterctl doc example combines them). If a
@@ -178,14 +185,25 @@ helm template cilium cilium \
 
 export PKR_VAR_rendered_manifests_dir="${render_dir}"
 
-# Only when actually building the autoscaler-worker target — the pre-existing
-# rke2-proxmox target never needs clusterctl or RKE2's release artifacts, and
-# rendered_capi_manifests_dir/rendered_rke2_artifacts_dir both carry a safe
-# empty-string default (variables.pkr.hcl) for exactly this case.
-if [ "$build_target" = "autoscaler-worker" ]; then
+# capi-install.yaml is rendered for the control-plane target now, not the
+# autoscaler-worker one: bootstrap.sh's `kubectl apply -f
+# /opt/kube-compute/manifests/capi-install.yaml` step runs on the
+# control-plane/genesis node, which always boots from THIS image — never
+# from the autoscaler-worker image — so that's the image that needs the file
+# staged on it. rendered_capi_manifests_dir carries a safe empty-string
+# default (variables.pkr.hcl) for the case where this ever isn't set.
+if [ "$build_target" = "control-plane" ]; then
   render_capi_manifests "${render_dir}/capi"
-  stage_rke2_airgap_artifacts "${render_dir}/rke2-artifacts" "${PKR_VAR_k8s_version}"
   export PKR_VAR_rendered_capi_manifests_dir="${render_dir}/capi"
+fi
+
+# RKE2's own air-gap release artifacts are still autoscaler-worker only — the
+# pre-existing rke2-proxmox/control-plane target does a normal online RKE2
+# install (rke2_bake_common's own install task) and never needs these.
+# rendered_rke2_artifacts_dir carries a safe empty-string default
+# (variables.pkr.hcl) for exactly this case.
+if [ "$build_target" = "autoscaler-worker" ]; then
+  stage_rke2_airgap_artifacts "${render_dir}/rke2-artifacts" "${PKR_VAR_k8s_version}"
   export PKR_VAR_rendered_rke2_artifacts_dir="${render_dir}/rke2-artifacts"
 fi
 
