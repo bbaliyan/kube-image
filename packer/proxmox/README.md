@@ -119,70 +119,39 @@ the same `helm template` invocations `build.sh` runs, and pass
 with none of this set fails immediately rather than baking a stale or empty
 manifest.
 
-## Second build target: proxmox-autoscaler-worker
+## CAPI/CAPMOX install manifest
 
-This directory holds two Packer build blocks (Packer loads every `*.pkr.hcl`
-file in a directory as one merged config):
+There is only one build target in this directory (`rke2-proxmox`,
+`template.pkr.hcl`) — a full RKE2 install baked onto the template, plus the
+genesis Cilium/Argo CD manifests. It also unconditionally stages
+`/opt/kube-compute/manifests/capi-install.yaml` — the concatenated
+`clusterctl generate provider` output for CAPI core + CAPMOX only (two
+`clusterctl` calls, `--core` and `--infrastructure`) — the same way the
+Cilium/Argo CD manifests are baked regardless of whether a given cluster
+later enables cluster-autoscaler. `kube-compute`'s `bootstrap.sh.tftpl`
+applies this manifest with `kubectl apply` from the control-plane/genesis
+node on clusters with `cluster_autoscaler_enabled = true`.
 
-- `rke2-proxmox` (`template.pkr.hcl`) — the default, documented above: a full
-  RKE2 install baked onto the template, plus the genesis Cilium/Argo CD
-  manifests. It now **also** stages
-  `/opt/kube-compute/manifests/capi-install.yaml` — the concatenated
-  `clusterctl generate provider` output for CAPI core + CAPMOX + CAPRKE2
-  (bootstrap + control-plane) — unconditionally, the same way the Cilium/
-  Argo CD manifests are baked regardless of whether a given cluster later
-  enables GitOps. This has to live on the control-plane image, not the
-  worker one below: `kube-compute`'s `bootstrap.sh.tftpl` applies this
-  manifest with `kubectl apply` from the control-plane/genesis node on
-  clusters with `cluster_autoscaler_enabled = true`, and that node always
-  boots from this template, never from `proxmox-autoscaler-worker`.
-- `proxmox-autoscaler-worker` (`autoscaler-worker.pkr.hcl`) — a second,
-  lighter image variant for CAPI-managed (cluster-autoscaler) worker nodes.
-  It does **not** install RKE2 and does **not** stage `capi-install.yaml`
-  (see above — no CAPRKE2 worker ever applies it). Instead it stages:
-  - `/opt/install.sh` + `/opt/rke2-artifacts/{rke2.linux-amd64.tar.gz,
-    rke2-images.linux-amd64.tar.zst,sha256sum-amd64.txt}` — RKE2's own
-    air-gap artifact layout, for CAPRKE2's own boot-time `install.sh`
-    re-invocation to consume once a `Machine` boots from this template
-    (entirely outside this repo's control from that point on).
+There is no CAPRKE2 (bootstrap/control-plane provider) install anywhere in
+this manifest and no second, lighter image variant for CAPI-managed worker
+nodes — cluster-autoscaler workers join via a plain
+`Machine.spec.bootstrap.dataSecretName` pointing at pre-rendered cloud-init
+in a Kubernetes `Secret`, entirely bypassing any bootstrap-provider CRD, so
+every autoscaler-worker `Machine` boots from this same, one template.
 
-  `build.sh` resolves `capi_core_version`/`capmox_version`/
-  `caprke2_version` (from kube-platform's `platform-versions.yaml` —
-  `capiCoreVersion`/`capmoxVersion`/`caprke2Version`) for **every** build now
-  — `rke2-proxmox` needs them to render `capi-install.yaml`, and
-  `proxmox-autoscaler-worker` still uses them for its own template
-  name/description. Only `rke2-proxmox` actually calls
-  `clusterctl generate provider` and writes `capi-install.yaml` to the
-  template, though; building `proxmox-autoscaler-worker` alone never needs a
-  `clusterctl` binary.
-
-`build.sh` has no HCL-level "build target" variable to select between the
-two — Packer's own CLI provides that via `-only=<build_name>.<source_type>.<source_name>`.
-Without an explicit `-only`, `build.sh` defaults to building only
-`rke2-proxmox` (preserving this script's pre-existing behavior from before
-this second target existed) — a bare `packer build .` (bypassing `build.sh`)
-would otherwise build **both** targets on every invocation, since that's
-Packer's own default when a directory has more than one build block.
-
-```bash
-# Build only the new autoscaler-worker target:
-./build.sh -only=proxmox-autoscaler-worker.proxmox-clone.autoscaler-worker .
-
-# Build only the pre-existing control-plane/pool target (same as omitting
-# -only entirely — this is build.sh's default):
-./build.sh -only=rke2-proxmox.proxmox-clone.rke2 .
-```
-
-`rke2-proxmox` now needs a `clusterctl` binary on the build host and network
-access to `raw.githubusercontent.com`/the provider repos it fetches
-`clusterctl generate provider` manifests from — this used to be an
-autoscaler-worker-only requirement, but capi-install.yaml rendering moved to
-this target (see above). `proxmox-autoscaler-worker` itself no longer needs
-`clusterctl` at all, only the same network access `rke2-proxmox` needs for
-version resolution. Requires kube-platform's
+`build.sh` resolves `capi_core_version`/`capmox_version` (from
+kube-platform's `platform-versions.yaml` — `capiCoreVersion`/
+`capmoxVersion`) for every build, and always renders `capi-install.yaml` via
+`clusterctl generate provider`. Building requires a `clusterctl` binary on
+the build host, network access to `raw.githubusercontent.com`/the provider
+repos it fetches manifests from, and `PROXMOX_URL`/`PROXMOX_TOKEN`/
+`PROXMOX_SECRET` set in the build environment (CAPMOX's `--infrastructure`
+generation templates its manager credentials `Secret` from these — `build.sh`
+fails loudly if any is unset rather than baking an empty/placeholder
+credentials `Secret`). Requires kube-platform's
 `platform/platform-versions/values.yaml` to carry `capiCoreVersion`/
-`capmoxVersion`/`caprke2Version` — not present until that repo's own
-version-pin change lands.
+`capmoxVersion` — not present until that repo's own version-pin change
+lands.
 
 ## Pruning old builds
 
