@@ -57,15 +57,20 @@ variable "ssh_private_key_file" {
 
 variable "k8s_version" {
   type        = string
-  description = "RKE2 release string to bake, e.g. v1.36.1+rke2r1. Same neutral naming convention as kube-compute's k8s_version variable — no distro-specific variable name."
+  description = "RKE2 release string to bake, e.g. v1.36.1+rke2r1. Same neutral naming convention as kube-compute's k8s_version variable — no distro-specific variable name. Resolved automatically by build.sh from kube-platform's platform/platform-versions/values.yaml (k8sVersion) — do not set this in proxmox.auto.pkrvars.hcl (an auto.pkrvars.hcl entry outranks build.sh's PKR_VAR_k8s_version export, silently defeating the live resolution); override at the shell instead if you need a specific pin."
 }
 
 variable "cilium_version" {
   type        = string
-  description = "Cilium Helm chart version — not installed by this build (Cilium is a cluster-wide, launch-time concern), but baked into the output template's name so a consumer can tell which pin this image was built alongside."
+  description = "Cilium Helm chart version. Genesis-installs this pinned chart directly (see helm-values/cilium-values.yaml) — not RKE2's own rke2-cilium HelmChart CRD — into /opt/kube-compute/manifests/cilium.yaml on the template, for node-bootstrap to apply at first boot. Resolved automatically by build.sh from kube-platform's platform/platform-versions/values.yaml (ciliumVersion); same do-not-set-in-proxmox.auto.pkrvars.hcl caveat as k8s_version applies."
 }
 
 variable "argocd_version" {
   type        = string
-  description = "Argo CD Helm chart version — same name-only role as cilium_version above."
+  description = "Argo CD Helm chart version. Genesis-installs this pinned chart (see helm-values/argocd-values.yaml) into /opt/kube-compute/manifests/00-argocd.yaml on the template; only needs to produce *a* working Argo CD — kube-platform's own bootstrap/templates/argocd-app.yaml carries the consumer's chosen ongoing version afterward. Resolved automatically by build.sh from kube-platform's platform/platform-versions/values.yaml (argocdVersion); same do-not-set-in-proxmox.auto.pkrvars.hcl caveat as k8s_version applies."
+}
+
+variable "rendered_manifests_dir" {
+  type        = string
+  description = "Local directory (on the Packer build host) containing the pre-rendered cilium.yaml/00-argocd.yaml to copy onto the template. Always set by build.sh (a fresh mktemp -d per build, rendered via helm template immediately before invoking packer build) — not meant to be set by hand; there is no default so a bare 'packer build' (bypassing build.sh) fails loudly instead of silently baking a stale or missing manifest."
 }

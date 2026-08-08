@@ -7,10 +7,16 @@
 # proxmox_api_token_id      = "root@pam!packer"
 # proxmox_api_token_secret  = "REPLACE_ME"
 
+# k8s_version / cilium_version / argocd_version are deliberately NOT set here
+# (or in any .auto.pkrvars.hcl) — build.sh resolves them automatically from
+# kube-platform's platform/platform-versions/values.yaml before every build,
+# so the baked image can never silently drift from what Argo CD will
+# actually run once it adopts the genesis install. A var-file entry of the
+# same name outranks build.sh's PKR_VAR_* export and would silently defeat
+# this — if you need a specific pin, export PKR_VAR_k8s_version (etc.) at the
+# shell instead, which build.sh's fetch only fills in when unset.
+
 proxmox_node                     = "pve"
 seed_template_vm_id              = 9000
 disk_datastore_id                = "local-zfs"
 proxmox_insecure_skip_tls_verify = true
-k8s_version                      = "v1.36.1+rke2r1"
-cilium_version                   = "1.18.3"
-argocd_version                   = "9.1.5"

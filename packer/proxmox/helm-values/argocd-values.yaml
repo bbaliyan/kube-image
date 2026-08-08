@@ -1,0 +1,42 @@
+# SPDX-License-Identifier: Apache-2.0
+# Genesis Argo CD values — rendered into the baked template's
+# /opt/kube-compute/manifests/00-argocd.yaml via `helm template` at
+# kube-image build time (packer/proxmox/build.sh). Moved here from
+# kube-compute's node-bootstrap, which used to render this same content live
+# on every `tofu apply`. Only needs to produce *a* working Argo CD;
+# kube-platform's bootstrap/templates/argocd-app.yaml carries the consumer's
+# chosen ongoing version afterward (an in-place Helm upgrade, unlike a CNI
+# swap).
+configs:
+  params:
+    # Deliberate: TLS terminates upstream (ingress / load balancer); Argo CD serves plain HTTP behind it.
+    server.insecure: "true"
+# repo-server and application-controller ship with zero resource requests
+# (BestEffort QoS) and a 1s probe timeoutSeconds upstream — cheap insurance
+# against a repo-server/controller crash loop under scheduling jitter on a
+# small box.
+repoServer:
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  readinessProbe:
+    timeoutSeconds: 5
+    failureThreshold: 5
+  livenessProbe:
+    timeoutSeconds: 5
+    failureThreshold: 5
+controller:
+  resources:
+    requests:
+      cpu: 250m
+      memory: 256Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  readinessProbe:
+    timeoutSeconds: 5
+    failureThreshold: 5

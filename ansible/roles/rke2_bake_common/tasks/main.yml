@@ -155,6 +155,31 @@
   environment:
     INSTALL_RKE2_VERSION: "{{ k8s_version }}"
 
+# Pre-rendered on the Packer build host (packer/proxmox/build.sh runs `helm
+# template` there, not here) and copied in as plain files — this VM never
+# runs helm itself or reaches a chart repo. node-bootstrap applies whichever
+# of these are relevant to a given cluster at first boot (a per-cluster
+# runtime decision, e.g. CNI choice/GitOps enablement — unrelated to whether
+# the file exists on this template).
+- name: gitops | create the genesis manifests directory
+  ansible.builtin.file:
+    path: /opt/kube-compute/manifests
+    state: directory
+    mode: "0700"
+    owner: root
+    group: root
+
+- name: gitops | copy the pre-rendered Cilium/Argo CD manifests
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "/opt/kube-compute/manifests/{{ item.dest }}"
+    mode: "0600"
+    owner: root
+    group: root
+  loop:
+    - { src: "{{ rendered_manifests_dir }}/cilium.yaml", dest: "cilium.yaml" }
+    - { src: "{{ rendered_manifests_dir }}/00-argocd.yaml", dest: "00-argocd.yaml" }
+
 # Everything below is template-prep cleanup and MUST stay last: clones must not
 # inherit this builder's machine identity, SSH host keys, or the Packer
 # build-time SSH key, and cloud-init must re-run fresh on every clone.

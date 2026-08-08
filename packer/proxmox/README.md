@@ -72,7 +72,7 @@ working directory, not the repo root.
 ```bash
 cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
 # edit proxmox.auto.pkrvars.hcl: proxmox_node, seed_template_vm_id,
-# disk_datastore_id, k8s_version, cilium_version, argocd_version
+# disk_datastore_id
 packer init .
 ./build.sh .
 ```
@@ -84,10 +84,40 @@ editing — `build.sh` derives them fresh from `PROXMOX_VE_ENDPOINT`/
 `packer build` isn't used directly — the devcontainer's own automatic
 derivation only re-runs on a new shell, so refreshing the token with
 `kube-proxmox-login` and reusing the same terminal can otherwise build with a
-stale, already-expired token). Building outside the devcontainer, or without
-`build.sh`? Set those three explicitly in `proxmox.auto.pkrvars.hcl` instead
-(commented-out examples are in `proxmox.auto.pkrvars.hcl.example`), then run
-`packer build .` directly.
+stale, already-expired token).
+
+`k8s_version`/`cilium_version`/`argocd_version` don't need editing either —
+`build.sh` fetches kube-platform's `platform/platform-versions/values.yaml`
+before every build and resolves all three from it, so the baked image can't
+silently drift from what Argo CD will actually run once it adopts Cilium and
+itself from the genesis install. This needs network access to
+`raw.githubusercontent.com` and to the Cilium/Argo CD Helm repos (the render
+below also needs the latter). Do **not** set these three in
+`proxmox.auto.pkrvars.hcl` — a var-file entry outranks `build.sh`'s exported
+`PKR_VAR_*`, silently defeating the fetch; `export PKR_VAR_cilium_version=...`
+(etc.) at the shell first if you need a specific pin instead of the current
+`platform-versions.yaml` value.
+
+`build.sh` also renders the genesis Cilium/Argo CD manifests (`helm template`
+against `helm-values/cilium-values.yaml`/`argocd-values.yaml`, at the
+resolved versions) into a temp directory on this machine, then the Ansible
+provisioner copies the result onto the template at
+`/opt/kube-compute/manifests/{cilium.yaml,00-argocd.yaml}` — rendering here
+rather than on the VM being baked, and baking the result rather than
+re-rendering on every cluster's `tofu apply`, is what keeps Argo CD's ~1.9 MB
+of CRDs out of `node-bootstrap`'s cloud-init payload (which has a hard 1 MiB
+cap on Proxmox).
+
+Building outside the devcontainer, or without `build.sh`? Set all six
+(`proxmox_url`/`proxmox_api_token_id`/`proxmox_api_token_secret`/
+`k8s_version`/`cilium_version`/`argocd_version`) explicitly in
+`proxmox.auto.pkrvars.hcl` instead (commented-out examples are in
+`proxmox.auto.pkrvars.hcl.example`), render the two manifests yourself with
+the same `helm template` invocations `build.sh` runs, and pass
+`-var rendered_manifests_dir=<path to the directory containing them>` on the
+`packer build .` command line — there's no default, so a bare `packer build`
+with none of this set fails immediately rather than baking a stale or empty
+manifest.
 
 ## Pruning old builds
 

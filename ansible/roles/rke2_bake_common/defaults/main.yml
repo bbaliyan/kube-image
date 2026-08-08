@@ -1,3 +1,8 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 k8s_version: ""
+# Always passed via --extra-vars by the invoking Packer template
+# (packer/proxmox/template.pkr.hcl), pointing at build.sh's mktemp -d
+# render output. No real default — the empty string fails loudly (copy
+# module errors on a nonexistent src) rather than silently baking nothing.
+rendered_manifests_dir: ""

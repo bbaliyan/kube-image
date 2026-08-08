@@ -102,6 +102,7 @@ build {
     user          = var.ssh_username
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
+      "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",
     ]
   }
 }
