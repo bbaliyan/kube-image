@@ -1,0 +1,10 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# Always passed via --extra-vars by autoscaler-worker.pkr.hcl's ansible
+# provisioner, pointing at build.sh's mktemp -d render output (see that
+# file's render_capi_manifests/stage_rke2_airgap_artifacts functions). No
+# real default — the empty string fails loudly (copy module errors on a
+# nonexistent src) rather than silently baking nothing, same convention as
+# rke2_bake_common/defaults/main.yml's rendered_manifests_dir.
+rendered_capi_manifests_dir: ""
+rendered_rke2_artifacts_dir: ""

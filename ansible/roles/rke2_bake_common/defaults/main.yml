@@ -6,3 +6,13 @@ k8s_version: ""
 # render output. No real default — the empty string fails loudly (copy
 # module errors on a nonexistent src) rather than silently baking nothing.
 rendered_manifests_dir: ""
+
+# Both default true (this role's original, only behavior). Set false only by
+# playbook-proxmox-autoscaler-worker.yml (via role vars) — the
+# proxmox-autoscaler-worker build stages RKE2's air-gap artifacts for
+# CAPRKE2's own boot-time install.sh instead of a full install here, and
+# doesn't render/copy the Cilium/Argo CD genesis manifests at all (it's not a
+# full node bake), so rendered_manifests_dir is never set for that build and
+# the copy task below must be skippable rather than failing on a missing src.
+bake_install_rke2: true
+bake_copy_gitops_manifests: true

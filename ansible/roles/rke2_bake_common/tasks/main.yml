@@ -154,6 +154,7 @@
     creates: /usr/local/bin/rke2-uninstall.sh
   environment:
     INSTALL_RKE2_VERSION: "{{ k8s_version }}"
+  when: bake_install_rke2
 
 # Pre-rendered on the Packer build host (packer/proxmox/build.sh runs `helm
 # template` there, not here) and copied in as plain files — this VM never
@@ -168,6 +169,7 @@
     mode: "0700"
     owner: root
     group: root
+  when: bake_copy_gitops_manifests
 
 - name: gitops | copy the pre-rendered Cilium/Argo CD manifests
   ansible.builtin.copy:
@@ -179,6 +181,7 @@
   loop:
     - { src: "{{ rendered_manifests_dir }}/cilium.yaml", dest: "cilium.yaml" }
     - { src: "{{ rendered_manifests_dir }}/00-argocd.yaml", dest: "00-argocd.yaml" }
+  when: bake_copy_gitops_manifests
 
 # Everything below is template-prep cleanup and MUST stay last: clones must not
 # inherit this builder's machine identity, SSH host keys, or the Packer
