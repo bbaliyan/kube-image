@@ -1,0 +1,38 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":dependencyDashboard"
+  ],
+  "labels": ["renovate"],
+  "enabledManagers": ["terraform", "github-actions"],
+  "packageRules": [
+    {
+      "description": "Batch routine patch updates into one weekly PR",
+      "matchUpdateTypes": ["patch", "pin", "pinDigest"],
+      "groupName": "patch updates",
+      "schedule": ["before 6am on Monday"]
+    },
+    {
+      "description": "Auto-merge patch PRs once CI is green",
+      "matchUpdateTypes": ["patch"],
+      "automerge": true,
+      "automergeType": "pr"
+    },
+    {
+      "description": "Minor/major require manual review",
+      "matchUpdateTypes": ["minor", "major"],
+      "automerge": false,
+      "labels": ["renovate", "needs-review"]
+    },
+    {
+      "description": "Security fixes get individual PRs immediately",
+      "matchCategories": ["security"],
+      "groupName": null,
+      "schedule": ["at any time"],
+      "automerge": false,
+      "labels": ["renovate", "security"]
+    }
+  ]
+}
