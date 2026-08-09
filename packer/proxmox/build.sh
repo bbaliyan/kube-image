@@ -100,7 +100,12 @@ render_capi_manifests() {
 
   clusterctl generate provider --core "cluster-api:${PKR_VAR_capi_core_version}" \
     --write-to "${out_dir}/00-capi-core.yaml"
-  clusterctl generate provider --infrastructure "ionos-cloud-proxmox:${PKR_VAR_capmox_version}" \
+  # clusterctl's built-in provider name for ionos-cloud/cluster-api-provider-proxmox
+  # is "proxmox" -- NOT "ionos-cloud-proxmox" (that name doesn't exist; easy to
+  # confuse with the unrelated "ionoscloud-ionoscloud" provider, IONOS's actual
+  # cloud, which happens to live in the same GitHub org). Confirmed against
+  # clusterctl's embedded provider list (cmd/clusterctl/client/config/providers_client.go).
+  clusterctl generate provider --infrastructure "proxmox:${PKR_VAR_capmox_version}" \
     --write-to "${out_dir}/01-capmox.yaml"
 
   cat "${out_dir}"/*.yaml >"${out_dir}/capi-install.yaml"
