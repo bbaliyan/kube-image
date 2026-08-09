@@ -141,19 +141,40 @@
       done
   changed_when: true
 
-# Installs both rke2-server.service and rke2-agent.service units, unstarted.
-# Role selection (which unit to enable+start) is entirely a launch-time decision —
-# kube-compute's lean cloud-init picks based on node_role. Not yet verified against
-# a real installed image; confirm at the first real Packer bake (README's manual
-# validation step).
-- name: rke2 | install RKE2 (unqualified — both server and agent units)
+# get.rke2.io's rpm-method install only installs the rke2-${INSTALL_RKE2_TYPE}
+# package (INSTALL_RKE2_TYPE defaults to "server"), which ships ONLY
+# rke2-server.service. It does add the Rancher RKE2 repos as a side effect,
+# which the next task relies on to also pull in rke2-agent.
+- name: rke2 | install RKE2 server (also adds the Rancher RKE2 repos)
   ansible.builtin.shell:
     cmd: |
       set -euo pipefail
       curl -sfL https://get.rke2.io | sh -
-    creates: /usr/local/bin/rke2-uninstall.sh
+    creates: /usr/bin/rke2
   environment:
     INSTALL_RKE2_VERSION: "{{ k8s_version }}"
+  when: bake_install_rke2
+
+# Confirmed against a real bake: without this task, the image ends up with
+# only rke2-server.service, so a worker-role clone's cloud-init
+# `systemctl enable --now rke2-agent.service` fails outright ("Unit
+# rke2-agent.service does not exist") and the node never joins. Role
+# selection (which unit to enable+start) is a launch-time decision —
+# kube-compute's lean cloud-init picks based on node_role — this task just
+# ensures both units are present, unstarted, on every image regardless of
+# which role a given clone ends up playing.
+- name: rke2 | also install rke2-agent (get.rke2.io only installs rke2-server by default)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      for attempt in 1 2 3 4 5; do
+        dnf install -y rke2-agent && exit 0
+        [ "$attempt" -eq 5 ] && exit 1
+        sleep 15
+        pkill -x dnf 2>/dev/null || true
+        pkill -x rpm 2>/dev/null || true
+      done
+    creates: /usr/lib/systemd/system/rke2-agent.service
   when: bake_install_rke2
 
 # Pre-rendered on the Packer build host (packer/proxmox/build.sh runs `helm
