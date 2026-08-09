@@ -153,6 +153,11 @@ export PKR_VAR_rendered_manifests_dir="${render_dir}"
 render_capi_manifests "${render_dir}/capi"
 export PKR_VAR_rendered_capi_manifests_dir="${render_dir}/capi"
 
+# packer init is idempotent (no-op if template.pkr.hcl's required_plugins are
+# already installed), so running it unconditionally on every build removes a
+# manual first-time step (README's "packer init .") without adding real cost.
+packer init "$@"
+
 # Not `exec` here (unlike this script would otherwise prefer): the render_dir
 # cleanup trap above only runs on this shell's own exit, which `exec`
 # replacing the process image would skip entirely.
