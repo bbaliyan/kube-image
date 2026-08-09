@@ -8,25 +8,16 @@ k8s_version: ""
 rendered_manifests_dir: ""
 
 # Also always passed via --extra-vars by template.pkr.hcl (build.sh renders
-# capi-install.yaml — the CAPI/CAPMOX/CAPRKE2 install manifest — onto the
-# control-plane/rke2-proxmox image now, not the autoscaler-worker one:
-# bootstrap.sh applies it from the control-plane/genesis node, which boots
-# from THIS image). Empty default so playbook-proxmox-autoscaler-worker.yml
-# (which sets bake_stage_capi_manifests: false and never passes this var)
-# doesn't trip the "no real default" copy-module failure meant for the
-# rke2-proxmox build only.
+# capi-install.yaml — the CAPI/CAPMOX install manifest, unconditionally, as
+# part of the one rke2-proxmox build — there is no second build target;
+# CAPRKE2 and the separate autoscaler-worker image variant that used to
+# exist were both dropped, see git history for why).
 rendered_capi_manifests_dir: ""
 
-# All three default true (this role's original behavior, extended to
-# bake_stage_capi_manifests below). Set false only by
-# playbook-proxmox-autoscaler-worker.yml (via role vars) — the
-# proxmox-autoscaler-worker build stages RKE2's air-gap artifacts for
-# CAPRKE2's own boot-time install.sh instead of a full install here, and
-# doesn't render/copy the Cilium/Argo CD genesis manifests or the CAPI
-# install manifest at all (it's not a full node bake and never applies that
-# manifest itself), so rendered_manifests_dir/rendered_capi_manifests_dir are
-# never set for that build and the copy tasks below must be skippable rather
-# than failing on a missing src.
+# All three default true — this role's original behavior. Kept as toggles
+# (rather than deleted now that there's only one build target using them)
+# in case a future lighter/alternate image variant needs to skip one of
+# these steps again; currently every real build sets none of them false.
 bake_install_rke2: true
 bake_copy_gitops_manifests: true
 bake_stage_capi_manifests: true

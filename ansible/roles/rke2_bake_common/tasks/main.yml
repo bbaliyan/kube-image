@@ -183,17 +183,14 @@
     - { src: "{{ rendered_manifests_dir }}/00-argocd.yaml", dest: "00-argocd.yaml" }
   when: bake_copy_gitops_manifests
 
-# capi-install.yaml (the concatenated CAPI core + CAPMOX + CAPRKE2 install
-# manifest, rendered on the build host by build.sh's render_capi_manifests())
-# lives on the control-plane image now, not the autoscaler-worker one:
-# bootstrap.sh's `kubectl apply -f
-# /opt/kube-compute/manifests/capi-install.yaml` step runs only on the
-# control-plane/genesis node, which boots from THIS image, never the
-# autoscaler-worker image. Whether a given cluster actually needs it
-# (cluster_autoscaler_enabled) is a per-cluster runtime decision made at
-# bootstrap.sh/terraform-apply time, same as GitOps enablement above — this
-# role bakes it in unconditionally (gated only on bake_stage_capi_manifests,
-# which is about which IMAGE this is, not which cluster it becomes).
+# capi-install.yaml (the concatenated CAPI core + CAPMOX install manifest,
+# rendered on the build host by build.sh's render_capi_manifests()) is baked
+# into this one image unconditionally. Whether a given cluster actually
+# needs it (cluster_autoscaler_enabled) is a per-cluster runtime decision
+# made at bootstrap.sh/terraform-apply time, same as GitOps enablement
+# above — this role bakes it in regardless (gated only on
+# bake_stage_capi_manifests, a defaults/main.yml toggle, not a
+# cluster-level one).
 - name: capi | copy the rendered CAPI install manifest
   ansible.builtin.copy:
     src: "{{ rendered_capi_manifests_dir }}/capi-install.yaml"
