@@ -143,15 +143,21 @@ every autoscaler-worker `Machine` boots from this same, one template.
 kube-platform's `platform-versions.yaml` — `capiCoreVersion`/
 `capmoxVersion`) for every build, and always renders `capi-install.yaml` via
 `clusterctl generate provider`. Building requires a `clusterctl` binary on
-the build host, network access to `raw.githubusercontent.com`/the provider
-repos it fetches manifests from, and `PROXMOX_URL`/`PROXMOX_TOKEN`/
-`PROXMOX_SECRET` set in the build environment (CAPMOX's `--infrastructure`
-generation templates its manager credentials `Secret` from these — `build.sh`
-fails loudly if any is unset rather than baking an empty/placeholder
-credentials `Secret`). Requires kube-platform's
-`platform/platform-versions/values.yaml` to carry `capiCoreVersion`/
-`capmoxVersion` — not present until that repo's own version-pin change
-lands.
+the build host and network access to `raw.githubusercontent.com`/the
+provider repos it fetches manifests from. CAPMOX's `--infrastructure`
+generation templates its manager credentials `Secret` from
+`PROXMOX_URL`/`PROXMOX_TOKEN`/`PROXMOX_SECRET` (CAPMOX's own naming,
+distinct from bpg/proxmox's `PROXMOX_VE_*` and this script's own
+`PKR_VAR_*`) — `build.sh` re-derives these automatically from
+`PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN`, same as it already does for
+`PKR_VAR_proxmox_url`/`_api_token_id`/`_api_token_secret`, so no separate
+manual export is needed when those are already set (e.g. via
+`kube-proxmox-login`). `build.sh` fails loudly if `PROXMOX_VE_ENDPOINT`/
+`PROXMOX_VE_API_TOKEN` (or the three `PROXMOX_*` vars directly) aren't set,
+rather than baking an empty/placeholder credentials `Secret`. Requires
+kube-platform's `platform/platform-versions/values.yaml` to carry
+`capiCoreVersion`/`capmoxVersion` — not present until that repo's own
+version-pin change lands.
 
 ## Pruning old builds
 

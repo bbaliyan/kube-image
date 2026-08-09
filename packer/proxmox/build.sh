@@ -26,6 +26,21 @@ if [ -n "${PROXMOX_VE_API_TOKEN:-}" ]; then
   export PKR_VAR_proxmox_api_token_secret="${PROXMOX_VE_API_TOKEN#*=}"
 fi
 
+# CAPMOX (clusterctl generate provider --infrastructure, in
+# render_capi_manifests below) reads its manager credentials from
+# PROXMOX_URL/PROXMOX_TOKEN/PROXMOX_SECRET — CAPMOX's own naming, distinct
+# from both PROXMOX_VE_* (bpg/proxmox's Terraform provider) and PKR_VAR_* (this
+# script's own Packer vars) even though it's the same underlying credentials.
+# Re-derive here too so a plain './build.sh .' works right after
+# kube-proxmox-login, same as the PKR_VAR_* derivation above.
+if [ -n "${PROXMOX_VE_ENDPOINT:-}" ]; then
+  export PROXMOX_URL="${PROXMOX_VE_ENDPOINT}/api2/json"
+fi
+if [ -n "${PROXMOX_VE_API_TOKEN:-}" ]; then
+  export PROXMOX_TOKEN="${PROXMOX_VE_API_TOKEN%%=*}"
+  export PROXMOX_SECRET="${PROXMOX_VE_API_TOKEN#*=}"
+fi
+
 # ---- k8s/Cilium/Argo CD/CAPI version resolution -----------------------------
 # Same pin kube-compute's component-versions module carries
 # (pinned_platform_repo_url/_revision) — each repo keeps its own copy rather
