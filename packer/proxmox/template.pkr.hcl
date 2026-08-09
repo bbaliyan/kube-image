@@ -100,6 +100,17 @@ build {
   provisioner "ansible" {
     playbook_file = "../../ansible/playbook-proxmox.yml"
     user          = var.ssh_username
+    # Default (true) routes ansible-playbook's SSH through Packer's own proxy
+    # adapter, which tunnels over Packer's already-established communicator
+    # session to the VM. rke2_bake_common's mid-play reboot (os-prep | reboot
+    # after the OS update) kills that underlying session; ansible.builtin.reboot's
+    # own reconnect/retry logic can't recover it, since it's retrying against a
+    # dead proxy, not a real socket -- the build hangs on "connection refused"
+    # indefinitely. use_proxy=false makes ansible-playbook dial the VM's real IP
+    # directly instead, so a plain TCP retry actually succeeds once the VM is
+    # back up. Requires the Packer build host to reach the VM's IP directly
+    # (true here -- same LAN as pve.local).
+    use_proxy = false
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
       "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",
