@@ -6,10 +6,9 @@
   become: true
   vars:
     # AWS's node pool comes back as a fixed-size ASG (no cluster-autoscaler
-    # integration yet — see kube-image-design Ticket 07 / the
-    # aws-kube-image-cutover map's "Out of scope" section), so this image
-    # never needs the CAPI/CAPMOX install manifest rke2_bake_common's
-    # capi-related tasks stage for Proxmox's cluster-autoscaler path.
+    # integration yet), so this image never needs the CAPI/CAPMOX install
+    # manifest rke2_bake_common's capi-related tasks stage for Proxmox's
+    # cluster-autoscaler path.
     # Overriding the role default (true) here, rather than passing
     # rendered_capi_manifests_dir at all, keeps packer/aws/build.sh from
     # having to render (or fake) a CAPMOX-flavored manifest that has no AWS

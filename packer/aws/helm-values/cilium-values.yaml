@@ -3,11 +3,11 @@
 # /opt/kube-compute/manifests/cilium.yaml via `helm template` at kube-image
 # build time (packer/aws/build.sh). Deliberate duplicate of
 # packer/proxmox/helm-values/cilium-values.yaml, not a shared/symlinked file:
-# each provider's Packer template is self-contained by design (kube-image-design
-# Ticket 03), so only the Ansible bake role is genuinely shared across
-# providers. Content here must be kept identical to the Proxmox copy by hand
-# — both are meant to produce the same genesis Cilium install regardless of
-# provider. Kept in sync with kube-platform's bootstrap/templates/cilium-app.yaml,
+# each provider's Packer template is self-contained by design, so only the
+# Ansible bake role is genuinely shared across providers. Content here must
+# be kept identical to the Proxmox copy by hand — both are meant to produce
+# the same genesis Cilium install regardless of provider. Kept in sync with
+# kube-platform's bootstrap/templates/cilium-app.yaml,
 # which is authoritative once Argo CD adopts this genesis install.
 kubeProxyReplacement: true
 k8sServiceHost: "127.0.0.1"
