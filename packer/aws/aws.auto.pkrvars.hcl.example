@@ -1,0 +1,20 @@
+# k8s_version / cilium_version / argocd_version are deliberately NOT set here
+# (or in any .auto.pkrvars.hcl) — build.sh resolves them automatically from
+# kube-platform's platform/platform-versions/values.yaml before every build,
+# so the baked image can never silently drift from what Argo CD will
+# actually run once it adopts the genesis install. A var-file entry of the
+# same name outranks build.sh's PKR_VAR_* export and would silently defeat
+# this — if you need a specific pin, export PKR_VAR_k8s_version (etc.) at the
+# shell instead, which build.sh's fetch only fills in when unset.
+
+aws_region    = "us-east-1"
+instance_type = "t3.medium"
+
+# subnet_id left unset here — defaults to null, which lets Packer/AWS fall
+# back to the account's default VPC. Set it if your account has no default
+# VPC, or to build in a specific subnet:
+# subnet_id = "subnet-0123456789abcdef0"
+
+# ami_architecture defaults to "x86_64" — override only for an
+# arm64/Graviton instance_type:
+# ami_architecture = "arm64"

@@ -1,0 +1,17 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# AWS-only bake tasks. Included alongside rke2_bake_common by
+# ansible/playbook-aws.yml — never gated behind a runtime node_provider
+# variable, since each provider already gets its own Packer template and
+# playbook, so the provider is known at build-invocation time, not runtime.
+#
+# Unlike rke2_bake_proxmox (which needs a real task, the hot-vCPU udev
+# rule), there is currently nothing genuinely AWS-specific this bake needs:
+# the AlmaLinux 10 AMI's own cloud-init/ENA/NVMe drivers are already correct
+# out of the box, and AWS never hot-adds a vCPU to a running instance the
+# way Proxmox/KVM does. This role exists as an empty placeholder anyway
+# (rather than omitting it and adding rke2_bake_common directly to
+# playbook-aws.yml) so the split logic — provider-neutral steps in
+# rke2_bake_common, provider-specific steps in a per-provider role — stays
+# uniform across every provider's playbook, and so a genuinely AWS-specific
+# task has an obvious, already-wired home the moment one is needed.

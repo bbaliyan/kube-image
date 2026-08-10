@@ -17,7 +17,7 @@ there's no runtime `node_provider` conditional anywhere.
 ## Providers
 
 - **Proxmox** — supported. See `packer/proxmox/README.md`.
-- **AWS** — not yet supported.
+- **AWS** — supported. See `packer/aws/README.md`.
 - **Azure** — not supported (kube-compute has no viable Ansible transport for it yet).
 
 ## Proxmox credentials
@@ -27,12 +27,18 @@ The devcontainer sources `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN` from
 API token is short-lived (8h). Refresh it with `kube-proxmox-login` — a plain
 shell command, also available as the "Proxmox Login" VS Code task — before
 running `tofu apply` in `packer/proxmox/seed/` or a Packer build if it's expired.
-No cluster-selection step needed here (unlike `kube-compute`'s `kube-cloud-login`)
-— kube-image only ever talks to Proxmox.
+
+## AWS credentials
+
+Standard AWS credential chain (env vars, `~/.aws/credentials`, an assumed
+role, etc.) — the same way the AWS CLI and Terraform's AWS provider resolve
+credentials. Nothing kube-image-specific to set up beyond what
+`packer/aws/README.md`'s prerequisites list (notably the Session Manager
+plugin, used instead of a direct SSH connection to the build instance).
 
 ## Building
 
-Requires a one-time seed AlmaLinux 10 Proxmox template — see
+**Proxmox** requires a one-time seed AlmaLinux 10 Proxmox template — see
 `packer/proxmox/README.md`'s "One-time setup" (a single automated `tofu apply`,
 not a manual step).
 
@@ -48,22 +54,40 @@ packer init .
 ./build.sh .
 ```
 
+**AWS** needs no seed step — it builds from the AlmaLinux OS Foundation's own
+published AlmaLinux 10 AMI directly. See `packer/aws/README.md` for the full
+prerequisites (notably the Session Manager plugin).
+
+```bash
+cd packer/aws
+cp aws.auto.pkrvars.hcl.example aws.auto.pkrvars.hcl
+# edit aws.auto.pkrvars.hcl: aws_region, and subnet_id/ami_architecture if needed
+packer init .
+./build.sh .
+```
+
 ## Consuming a built image
 
-A build produces a Proxmox VM template named
-`kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`. Point
-`kube-compute`'s `proxmox-control-plane`/`proxmox-node-pool` modules at it via the
-`proxmox_template_vm_id` variable (its numeric Proxmox VM ID). The name is
-documentation only — kube-compute performs no compatibility check against it.
+Both providers produce an image self-descriptively named
+`kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
+(AWS AMI names sanitize `k8s_version`'s `+` to `-`; see `packer/aws/README.md`).
+Point `kube-compute`'s node modules at it: Proxmox's
+`proxmox-control-plane`/`proxmox-node-pool` via `proxmox_template_vm_id` (its
+numeric Proxmox VM ID); AWS's `aws-control-plane`/`aws-node-pool` via their
+existing `os_image_ami_id` variable. The name is documentation only —
+kube-compute performs no compatibility check against it.
 
 ## Development
 
 Open in the devcontainer (`ghcr.io/bbaliyan/kube-devenv` + Packer). Requires a local
 `kube-devenv:local` image build that includes Packer — rebuild it from
 `kube-devenv` if your local image predates the Packer addition. Validate without
-a live Proxmox connection:
+a live Proxmox/AWS connection:
 
 ```bash
 cd packer/proxmox && packer fmt -check . && packer validate .
-cd ../../ansible && ansible-playbook --syntax-check -i localhost, playbook-proxmox.yml
+cd ../aws && packer fmt -check . && packer validate .
+cd ../../ansible
+ansible-playbook --syntax-check -i localhost, playbook-proxmox.yml
+ansible-playbook --syntax-check -i localhost, playbook-aws.yml
 ```

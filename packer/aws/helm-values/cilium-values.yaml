@@ -1,0 +1,37 @@
+# SPDX-License-Identifier: Apache-2.0
+# Genesis Cilium values — rendered into the baked AMI's
+# /opt/kube-compute/manifests/cilium.yaml via `helm template` at kube-image
+# build time (packer/aws/build.sh). Deliberate duplicate of
+# packer/proxmox/helm-values/cilium-values.yaml, not a shared/symlinked file:
+# each provider's Packer template is self-contained by design (kube-image-design
+# Ticket 03), so only the Ansible bake role is genuinely shared across
+# providers. Content here must be kept identical to the Proxmox copy by hand
+# — both are meant to produce the same genesis Cilium install regardless of
+# provider. Kept in sync with kube-platform's bootstrap/templates/cilium-app.yaml,
+# which is authoritative once Argo CD adopts this genesis install.
+kubeProxyReplacement: true
+k8sServiceHost: "127.0.0.1"
+k8sServicePort: 6443
+# Node IPAM LB is the platform's LoadBalancer mechanism on every provider: it
+# advertises the node's own (LAN- or VPC-routable) IP into a LoadBalancer
+# Service, with the eBPF datapath forwarding to pods — no ARP, BGP, cloud
+# API, or extra component. defaultLBServiceIPAM makes every LoadBalancer
+# Service use it without a per-Service loadBalancerClass.
+nodeIPAM:
+  enabled: true
+defaultLBServiceIPAM: nodeipam
+operator:
+  # Matches kube-platform's cilium-app.yaml default: a single-node cluster
+  # is this project's current primary target, and cilium-operator's chart
+  # default (2 replicas, pod anti-affinity) leaves a second replica
+  # permanently Pending on a single node. A multi-node consumer needing 2
+  # back gets it the moment Argo CD adopts this install — no image rebuild
+  # needed. kube-compute's old cilium_operator_replicas override (a live
+  # per-cluster Helm value) doesn't carry forward here: this value is now
+  # baked once, shared across every cluster cloned from the template.
+  replicas: 1
+  tolerations:
+    - operator: Exists
+ipam:
+  operator:
+    clusterPoolIPv4PodCIDRList: ["10.42.0.0/16"]
