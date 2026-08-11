@@ -141,6 +141,15 @@
       done
   changed_when: true
 
+# RPM version string for k8s_version (e.g. "v1.36.2+rke2r1" -> "1.36.2~rke2r1"),
+# matching the NEVRA actually published on rpm.rancher.io (confirmed via
+# repoquery: rke2-common-0:1.36.2~rke2r1-0.el10). Used below to pin every
+# rke2-* package explicitly — see the rke2-common task's comment for why an
+# exact pin is required rather than trusting dnf's dependency resolution.
+- name: rke2 | compute the RPM-style version string for k8s_version
+  ansible.builtin.set_fact:
+    rke2_rpm_version: "{{ k8s_version | regex_replace('^v', '') | regex_replace('\\+', '~') }}"
+
 # get.rke2.io's rpm-method install only installs the rke2-${INSTALL_RKE2_TYPE}
 # package (INSTALL_RKE2_TYPE defaults to "server"), which ships ONLY
 # rke2-server.service. It does add the Rancher RKE2 repos as a side effect,
@@ -155,6 +164,24 @@
     INSTALL_RKE2_VERSION: "{{ k8s_version }}"
   when: bake_install_rke2
 
+# get.rke2.io pins rke2-server to an exact k8s_version via INSTALL_RKE2_VERSION,
+# but rke2-server's dependency on rke2-common is an unversioned constraint —
+# the "1.36-stable" repo keeps every recent patch build available
+# simultaneously, so dnf's solver is free to resolve rke2-common to whatever
+# is newest in the repo rather than matching rke2-server's pinned patch.
+# Confirmed on a real bake: rke2-server correctly pinned to 1.36.2, but
+# rke2-common (which actually ships /usr/bin/rke2) landed on 1.36.3 — `rke2
+# -v` reported the wrong version even though `rpm -q rke2-server` looked
+# right. Force the exact match explicitly rather than trust the dependency
+# resolver.
+- name: rke2 | pin rke2-common to the exact k8s_version (dnf otherwise resolves it independently of rke2-server)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      dnf install -y "rke2-common-{{ rke2_rpm_version }}"
+  when: bake_install_rke2
+  changed_when: true
+
 # Confirmed against a real bake: without this task, the image ends up with
 # only rke2-server.service, so a worker-role clone's cloud-init
 # `systemctl enable --now rke2-agent.service` fails outright ("Unit
@@ -163,12 +190,17 @@
 # kube-compute's lean cloud-init picks based on node_role — this task just
 # ensures both units are present, unstarted, on every image regardless of
 # which role a given clone ends up playing.
+#
+# Explicitly pinned to rke2_rpm_version — an unpinned `dnf install -y
+# rke2-agent` always resolves to whatever's newest in the repo, the same
+# failure mode as the rke2-common task above but for the agent package
+# itself rather than a dependency.
 - name: rke2 | also install rke2-agent (get.rke2.io only installs rke2-server by default)
   ansible.builtin.shell:
     cmd: |
       set -euo pipefail
       for attempt in 1 2 3 4 5; do
-        dnf install -y rke2-agent && exit 0
+        dnf install -y "rke2-agent-{{ rke2_rpm_version }}" && exit 0
         [ "$attempt" -eq 5 ] && exit 1
         sleep 15
         pkill -x dnf 2>/dev/null || true
