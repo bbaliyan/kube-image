@@ -1,25 +1,38 @@
 {
-  // Targets macOS, WSL2, and Windows+Docker Desktop. On Windows, open this
-  // repo FROM WITHIN a WSL2 distro's own filesystem (not a /mnt/c/... path)
-  // and launch VS Code with 'code .' there — i.e. "Reopen in WSL" before
-  // "Reopen in Container", the same order Microsoft's own devcontainer docs
-  // recommend for any Linux-container project. Opening a Windows-filesystem
-  // folder directly with Docker Desktop's Windows backend (no WSL involved)
-  // is NOT supported: ${localEnv:HOME} below only resolves on shells that
-  // set HOME (bash/WSL2; PowerShell 6+ sets it too, but cmd.exe and Explorer
-  // launches don't), and initializeCommand's bash syntax (mkdir -p) isn't
-  // valid under cmd.exe. Going through WSL2 sidesteps both: HOME resolves
-  // the same way it does on macOS/Linux, and file permissions on mounted
-  // keys are real Linux (ext4) permission bits, not an NTFS bind mount's
-  // simulated/often-ignored ones — SSH private keys need real 600 perms to
-  // work at all. UNVERIFIED against a real Windows/WSL2 machine — this
-  // environment has neither; confirm on one before relying on it.
+  // Targets macOS, WSL2, and native Windows+Docker Desktop (no WSL2 needed
+  // for the container itself — see the remaining caveat below).
+  //
+  // initializeCommand runs on the HOST, before the container exists, so it
+  // can't go through a Linux shell the way postCreateCommand etc. do. A
+  // *string* value is documented to run via a shell — /bin/sh on Unix hosts,
+  // but cmd.exe on native Windows (confirmed empirically: "mkdir -p ..."
+  // under cmd.exe errors, since cmd's mkdir has no -p flag and treats it as
+  // a literal bogus directory name). The *array* form below instead execs
+  // the named file directly, no shell involved, and each host OS's own
+  // executable-resolution rules pick the right file: Unix runs the
+  // extensionless `initialize` (a POSIX script), Windows resolves the same
+  // bare name to `initialize.cmd` instead. See both files for what each
+  // actually does — same effect (ensure the mount sources below exist),
+  // different syntax. Same dual-script technique documented at
+  // https://github.com/EliahKagan/portable-initialize.
+  //
+  // Remaining caveat, not fixed by the above: the ~/.ssh mount further down
+  // needs real Unix permission bits (600 on the private key) to be usable by
+  // ssh/git/Packer's SSH communicator, and a native-Windows NTFS bind mount
+  // has no real Unix permission bits to begin with — write-env.sh's chmod
+  // pass may not reliably take effect there the way it does on macOS/Linux/
+  // WSL2. If SSH-key-dependent operations (Packer's Proxmox build; git over
+  // SSH) fail specifically on native Windows with a key-permission error,
+  // open this repo from WITHIN a WSL2 distro's own filesystem instead (not
+  // a /mnt/c/... path) — WSL2's filesystem is real ext4, so permissions work
+  // exactly like macOS/Linux. UNVERIFIED against a real Windows/WSL2
+  // machine — this environment has neither.
   //
   // renovate: datasource=docker depName=ghcr.io/bbaliyan/kube-devenv
   "image": "ghcr.io/bbaliyan/kube-devenv:0.8.0",
   "name": "kube-image",
 
-  "initializeCommand": "mkdir -p ~/.ssh ~/.kube-compute ~/.aws",
+  "initializeCommand": [".devcontainer/initialize"],
   "postCreateCommand": "bash .devcontainer/write-env.sh",
 
   "mounts": [
