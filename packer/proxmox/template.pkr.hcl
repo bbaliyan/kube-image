@@ -13,9 +13,12 @@ packer {
 }
 
 locals {
-  build_date       = formatdate("YYYY-MM-DD", timestamp())
+  build_date = formatdate("YYYY-MM-DD", timestamp())
+  # Same slug packer/aws/template.pkr.hcl uses — bump both alongside the seed
+  # template if this project ever moves off AlmaLinux 10.
+  distro_slug      = "almalinux10"
   k8s_version_safe = replace(var.k8s_version, "+", "-")
-  image_name       = "kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}"
+  image_name       = "${local.distro_slug}-kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}"
   # Proxmox tags allow only [A-Za-z0-9_-] — stricter than VM/template names
   # (which allow dots, confirmed working in image_name above). k8s_version_safe
   # still has dots (e.g. "v1.36.1-rke2r1"), so tags need their own value.
@@ -34,12 +37,14 @@ source "proxmox-clone" "rke2" {
   vm_name              = local.image_name
   template_name        = local.image_name
   template_description = "RKE2 ${var.k8s_version} / Cilium ${var.cilium_version} / Argo CD ${var.argocd_version}, baked ${local.build_date}"
-  # Semicolon-separated (packer-plugin-proxmox's Tags is a single string, unlike
-  # bpg/proxmox's list-typed tags on the seed) — mirrors the seed's "kube-image"
-  # tag so both are findable together in the Proxmox UI, plus "template" (the
-  # seed's own tag is "seed-template" — distinct so the two are never confused)
-  # and the sanitized k8s_version for quick filtering without opening the VM.
-  tags = "kube-image;template;${local.k8s_version_tag}"
+  # Semicolon-separated (packer-plugin-proxmox's Tags is a single string,
+  # unlike bpg/proxmox's list-typed tags on the seed) — mirrors the seed's
+  # "kube-image" tag, plus "template" (seed's own tag is "seed-template", so
+  # the two are never confused), sanitized k8s_version, the distro slug, and
+  # the seed VM ID this was cloned from — AWS's equivalent traceability is
+  # source-ami-id; Proxmox has no queryable "resolved source", so the seed
+  # VM ID it actually cloned from is the closest fact worth recording.
+  tags = "kube-image;template;${local.k8s_version_tag};${local.distro_slug};seed-vm-${var.seed_template_vm_id}"
 
   cores  = 2
   memory = 2048

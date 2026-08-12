@@ -7,12 +7,11 @@
 # old AMIs/GCP images alongside Packer elsewhere. Selects VMs by the tags
 # template.pkr.hcl sets ("kube-image" + "template") and explicitly excludes
 # "seed-template" so the seed itself is never touched. Sorts by name — safe
-# because the name embeds the build date last (kube-image-<k8s_version>-
-# <cilium_version>-<argocd_version>-<build-date>) in YYYY-MM-DD order, so a
-# lexicographic sort is also date order, as long as k8s_version/cilium_version/
-# argocd_version stay the same width across the builds being compared (true
-# within one retention run in practice — different versions still sort
-# sensibly by date since YYYY-MM-DD dominates the tail of the string).
+# because the name embeds the build date last
+# (almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>)
+# in YYYY-MM-DD order, so a lexicographic sort is also date order (in
+# practice; still sorts sensibly across differing version widths since
+# YYYY-MM-DD dominates the tail of the string).
 #
 # Usage: ./prune-images.sh --node <proxmox-node> [--keep N] [--dry-run] [--yes]
 #   --node      Proxmox node the templates live on (required; matches

@@ -158,7 +158,15 @@ export PKR_VAR_rendered_capi_manifests_dir="${render_dir}/capi"
 # manual first-time step (README's "packer init .") without adding real cost.
 packer init "$@"
 
+# -timestamp-ui timestamps every output line, so a slow step is visible
+# while it's happening. Off by default (CI doesn't need it) — opt in with
+# PACKER_BUILD_TIMESTAMPS=1 ./build.sh .
+build_args=("$@")
+if [ "${PACKER_BUILD_TIMESTAMPS:-0}" = "1" ]; then
+  build_args=("-timestamp-ui" "${build_args[@]}")
+fi
+
 # Not `exec` here (unlike this script would otherwise prefer): the render_dir
 # cleanup trap above only runs on this shell's own exit, which `exec`
 # replacing the process image would skip entirely.
-packer build "$@"
+packer build "${build_args[@]}"

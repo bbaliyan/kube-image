@@ -33,7 +33,7 @@
   "name": "kube-image",
 
   "initializeCommand": [".devcontainer/initialize"],
-  "postCreateCommand": "bash .devcontainer/write-env.sh",
+  "postCreateCommand": "bash .devcontainer/write-env.sh && bash .devcontainer/post-create.sh",
 
   "mounts": [
     // ${localEnv:HOME}${localEnv:USERPROFILE} is not a typo: on any given
@@ -48,13 +48,7 @@
     // already match what a normal ~/.ssh has.
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind",
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.kube-compute,target=/root/.kube-compute,type=bind",
-    // AWS: no kube-image-specific credential derivation needed (unlike the
-    // Proxmox PKR_VAR_* rewrite in write-env.sh) — Packer's amazon-ebs
-    // builder reads the standard AWS credential chain directly (env vars,
-    // this mounted ~/.aws, an assumed role), the same way the AWS CLI and
-    // Terraform's AWS provider do. Same mount kube-examples' devcontainer
-    // uses for the same reason.
-    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/root/.aws,type=bind,readonly"
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/root/.aws,type=bind"
   ],
 
   "remoteEnv": {

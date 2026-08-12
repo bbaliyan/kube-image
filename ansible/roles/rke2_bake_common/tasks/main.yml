@@ -60,6 +60,8 @@
 - name: os-prep | reboot after the OS update
   ansible.builtin.reboot:
     reboot_timeout: 600
+    connect_timeout: "{{ bake_reboot_connect_timeout }}"
+    post_reboot_delay: "{{ bake_reboot_post_delay }}"
 
 # dnf update above already left a fresh cache, and no repo has changed since
 # — a second dnf makecache here was pure duplicate metadata sync (confirmed

@@ -10,11 +10,19 @@
 aws_region    = "us-east-1"
 instance_type = "t3.medium"
 
-# subnet_id left unset here — defaults to null, which lets Packer/AWS fall
-# back to the account's default VPC. Set it if your account has no default
-# VPC, or to build in a specific subnet:
+# subnet_id/vpc_id left unset here — defaults to the account's default VPC.
+# If your account has no default VPC, set both (not just subnet_id, or
+# RunInstances fails with "No default VPC for this user"):
 # subnet_id = "subnet-0123456789abcdef0"
+# vpc_id    = "vpc-0123456789abcdef0"   # find with: aws ec2 describe-subnets --subnet-ids <subnet_id> --query 'Subnets[0].VpcId' --output text
 
 # ami_architecture defaults to "x86_64" — override only for an
 # arm64/Graviton instance_type:
 # ami_architecture = "arm64"
+
+# extra_tags defaults to {} — cost-allocation/owner tags merged onto every
+# resource the build creates (see README's "Accounting tags"):
+# extra_tags = {
+#   CostCenter = "platform"
+#   Owner      = "your-name"
+# }

@@ -17,6 +17,12 @@ variable "subnet_id" {
   description = "Subnet the build instance launches into. Defaults to null, which leaves subnet selection to Packer/AWS's own default-VPC behavior (matches this project's default-VPC fallback used elsewhere, e.g. kube-compute's node modules) — set explicitly if the build host's account has no default VPC, or to build in a specific subnet."
 }
 
+variable "vpc_id" {
+  type        = string
+  default     = null
+  description = "VPC the build instance launches into. Defaults to null, which only works if the account has a default VPC — Packer doesn't reliably infer vpc_id from subnet_id alone, so an account with no default VPC needs both set or RunInstances fails with \"No default VPC for this user\". Find it with: aws ec2 describe-subnets --subnet-ids <subnet_id> --query 'Subnets[0].VpcId' --output text"
+}
+
 variable "ami_architecture" {
   type        = string
   default     = "x86_64"
@@ -26,13 +32,19 @@ variable "ami_architecture" {
 variable "ami_name" {
   type        = string
   default     = null
-  description = "Overrides the self-descriptive AMI name (kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>) computed automatically from k8s_version/cilium_version/argocd_version. Leave unset in normal use — only needed if AWS's AMI-name character restrictions ever reject the computed name for a future version string, or to disambiguate a rebuild on the same day."
+  description = "Overrides the self-descriptive AMI name (almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>) computed automatically from k8s_version/cilium_version/argocd_version. Leave unset in normal use — only needed if AWS's AMI-name character restrictions ever reject the computed name for a future version string, or to disambiguate a rebuild on the same day."
+}
+
+variable "extra_tags" {
+  type        = map(string)
+  default     = {}
+  description = "Extra tags (e.g. cost-center/owner for accounting) merged onto every AWS resource this build creates: the AMI, its snapshot, the temporary build instance, and the build instance's EBS volumes — not just the AMI. Merged on top of, and can't override, this template's own fixed tags (Name/kube-image/k8s-version/etc. — see template.pkr.hcl's local.common_tags)."
 }
 
 variable "ssh_username" {
   type        = string
-  default     = "almalinux"
-  description = "SSH user Packer's communicator and the Ansible provisioner both connect as — the AlmaLinux OS Foundation's published AMIs default cloud-init user, same account name Proxmox's seed template uses."
+  default     = "ec2-user"
+  description = "SSH user Packer's communicator and the Ansible provisioner both connect as — AWS's standard cloud-init default for RHEL-family AMIs. Not the same as Proxmox's seed template user (\"almalinux\"), which is specific to that custom-built image."
 }
 
 variable "k8s_version" {

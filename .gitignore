@@ -4,6 +4,8 @@ packer_cache/
 !*.pkrvars.hcl.example
 crash.log
 
+*.pem
+
 # Ansible
 *.retry
 

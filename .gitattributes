@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: Apache-2.0
+#
+# Forces LF on every text file regardless of platform, so a Windows checkout
+# doesn't show every line of every file as changed against LF-committed
+# history. LF specifically (not just platform-native) because *.sh scripts
+# run inside a Linux devcontainer/target host — a CRLF shebang fails to
+# exec — and Ansible's embedded shell blocks would carry a stray \r into
+# whatever runs on the remote host too.
+* text=auto eol=lf
+
+# Leave certs byte-exact rather than trusting text auto-detection.
+*.pem -text

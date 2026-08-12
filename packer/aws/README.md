@@ -59,14 +59,16 @@ payload.
 
 ## Base image
 
-`source_ami_filter` in `template.pkr.hcl` matches
+`data "amazon-ami" "almalinux10"` in `template.pkr.hcl` matches
 `kube-compute`'s `aws-control-plane/data.tf` (`data.aws_ami.almalinux10`)
 filter-for-filter: owner `764336703387`, name `"AlmaLinux OS 10*"`,
 virtualization-type `hvm`, state `available`, filtered by architecture
-(`var.ami_architecture`, default `x86_64`). This is not load-bearing for
-image currency — `rke2_bake_common`'s `dnf update -y` fully updates the
-instance regardless of which AlmaLinux 10 point release the filter resolves
-to at build time.
+(`var.ami_architecture`, default `x86_64`). A data source rather than an
+inline `source_ami_filter` so its resolved `.id` can be recorded as a tag
+(see "AMI naming" below) — an inline filter doesn't expose what it matched.
+Not load-bearing for image currency either way — `rke2_bake_common`'s
+`dnf update -y` fully updates the instance regardless of which AlmaLinux 10
+point release the filter resolves to.
 
 ## amazon-ssm-agent
 
@@ -94,12 +96,18 @@ revisit.
 ## AMI naming
 
 Self-descriptive, same convention as the Proxmox template's VM template
-name: `kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
+name: `almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
 (with `k8s_version`'s `+` sanitized to `-`, since AWS AMI names don't allow
 `+`). Point `kube-compute`'s `aws-control-plane`/`aws-node-pool` modules at
 the resulting AMI ID via their existing `os_image_ami_id` variable. The name
 is documentation only — kube-compute performs no compatibility check
 against it.
+
+The AMI/snapshot/build-instance tags also carry `base-distro` and
+`source-ami-id` (the upstream AlmaLinux AMI this build actually resolved
+and cloned from) — since the base-image filter is `most_recent = true`, it
+can resolve differently build to build, so this is what traces a given
+build back to its actual source.
 
 ## Pruning old builds
 
@@ -115,6 +123,33 @@ published base images this build sources from.
 ./prune-images.sh --region us-east-1 --dry-run   # see what would be destroyed
 ./prune-images.sh --region us-east-1             # keeps 3 by default, asks to confirm
 ./prune-images.sh --region us-east-1 --keep 5 --yes   # non-interactive
+```
+
+Separately, `prune-orphaned-iam.sh` sweeps up temporary IAM roles/instance
+profiles that a failed Packer cleanup left behind — packer-plugin-amazon
+intermittently fails to delete its temp role with `Cannot delete entity,
+must detach all policies first` (an IAM eventual-consistency race in the
+plugin, harmless to the built AMI, but it does leak a role each time). IAM
+has no regions, so unlike `prune-images.sh` this isn't region-scoped:
+
+```bash
+./prune-orphaned-iam.sh --dry-run   # see what would be deleted
+./prune-orphaned-iam.sh             # only touches roles >60min old, asks to confirm
+```
+
+## Accounting tags
+
+`extra_tags` (a `map(string)`, empty by default) is merged onto every AWS
+resource a build creates — the AMI, its snapshot, the build instance, and
+its volumes. Set it in `aws.auto.pkrvars.hcl` (gitignored, same as the rest
+of that file):
+
+```hcl
+# aws.auto.pkrvars.hcl
+extra_tags = {
+  CostCenter = "platform"
+  Owner      = "name"
+}
 ```
 
 ## Validating without a live AWS build

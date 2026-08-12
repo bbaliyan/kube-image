@@ -28,6 +28,15 @@ API token is short-lived (8h). Refresh it with `kube-proxmox-login` — a plain
 shell command, also available as the "Proxmox Login" VS Code task — before
 running `tofu apply` in `packer/proxmox/seed/` or a Packer build if it's expired.
 
+## Man in the middle network proxy
+
+Behind a MITM network proxy? Drop your org's root CA at
+`.devcontainer/org-root-ca.pem` before building the container —
+`post-create.sh` installs it into the container's trust store, otherwise TLS
+to GitHub/Helm/RKE2/AlmaLinux repos fails inside the container even though
+it works on the host. Not needed outside such a network, and never
+committed (`.gitignore`).
+
 ## AWS credentials
 
 Standard AWS credential chain (env vars, `~/.aws/credentials`, an assumed
@@ -69,7 +78,7 @@ packer init .
 ## Consuming a built image
 
 Both providers produce an image self-descriptively named
-`kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
+`almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
 (AWS AMI names sanitize `k8s_version`'s `+` to `-`; see `packer/aws/README.md`).
 Point `kube-compute`'s node modules at it: Proxmox's
 `proxmox-control-plane`/`proxmox-node-pool` via `proxmox_template_vm_id` (its
@@ -79,10 +88,9 @@ kube-compute performs no compatibility check against it.
 
 ## Development
 
-Open in the devcontainer (`ghcr.io/bbaliyan/kube-devenv` + Packer). Requires a local
-`kube-devenv:local` image build that includes Packer — rebuild it from
-`kube-devenv` if your local image predates the Packer addition. Validate without
-a live Proxmox/AWS connection:
+Open in the devcontainer — uses the latest `ghcr.io/bbaliyan/kube-devenv`
+image, which already ships Packer. Validate without a live Proxmox/AWS
+connection:
 
 ```bash
 cd packer/proxmox && packer fmt -check . && packer validate .
