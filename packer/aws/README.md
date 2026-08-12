@@ -68,6 +68,19 @@ image currency — `rke2_bake_common`'s `dnf update -y` fully updates the
 instance regardless of which AlmaLinux 10 point release the filter resolves
 to at build time.
 
+## amazon-ssm-agent
+
+`rke2_bake_aws` explicitly installs `amazon-ssm-agent` (from AWS's per-region
+S3 RPM bucket, using `aws_region`) rather than relying on it already being
+present. `kube-compute`'s `aws-control-plane`/`aws-node-pool` modules use SSM
+as their *entire* operator-access path — break-glass shell, verb-scripts,
+kubeconfig fetch — with no other transport at all (this project's
+no-inbound-SSH posture, CLAUDE.md hard constraint #6). Those modules'
+launch-time `systemctl enable --now amazon-ssm-agent` only assumes the
+AlmaLinux Foundation AMI ships the agent pre-installed and swallows failure
+if it doesn't, so this bake guarantees the package is actually there instead
+of leaving that assumption unconfirmed.
+
 ## Scope: no CAPI/CAPMOX manifest
 
 Unlike the Proxmox template, this AMI does **not** stage a CAPI/CAPMOX

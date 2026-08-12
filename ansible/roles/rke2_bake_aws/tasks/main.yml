@@ -5,13 +5,39 @@
 # variable, since each provider already gets its own Packer template and
 # playbook, so the provider is known at build-invocation time, not runtime.
 #
-# Unlike rke2_bake_proxmox (which needs a real task, the hot-vCPU udev
-# rule), there is currently nothing genuinely AWS-specific this bake needs:
-# the AlmaLinux 10 AMI's own cloud-init/ENA/NVMe drivers are already correct
+# The AlmaLinux 10 AMI's own cloud-init/ENA/NVMe drivers are already correct
 # out of the box, and AWS never hot-adds a vCPU to a running instance the
-# way Proxmox/KVM does. This role exists as an empty placeholder anyway
-# (rather than omitting it and adding rke2_bake_common directly to
-# playbook-aws.yml) so the split logic — provider-neutral steps in
-# rke2_bake_common, provider-specific steps in a per-provider role — stays
-# uniform across every provider's playbook, and so a genuinely AWS-specific
-# task has an obvious, already-wired home the moment one is needed.
+# way Proxmox/KVM does (rke2_bake_proxmox's reason for a real task, the
+# hot-vCPU udev rule) — so the one genuinely AWS-specific thing this bake
+# needs is amazon-ssm-agent, below.
+
+# kube-compute's aws-control-plane/aws-node-pool modules rely on SSM as their
+# entire operator-access path (break-glass shell, verb-scripts, kubeconfig
+# fetch — see aws-control-plane/main.tf's connectivity_user_data) with no
+# other transport at all: this project's no-inbound-SSH posture (CLAUDE.md
+# hard constraint #6) means there is no fallback if SSM isn't there. Those
+# modules' own launch-time `systemctl enable --now amazon-ssm-agent` only
+# assumes the AlmaLinux Foundation AMI ships the agent pre-installed
+# ("likely" per that module's own comment, not confirmed) and swallows
+# failure (`|| true`) if it doesn't — which would silently and permanently
+# break operator access on every node with no error surfaced anywhere.
+# Install it explicitly at bake time instead of relying on that assumption.
+- name: aws | install amazon-ssm-agent (retry + self-heal on lock contention)
+  ansible.builtin.shell:
+    cmd: |
+      set -euo pipefail
+      for attempt in 1 2 3 4 5; do
+        dnf install -y "https://s3.{{ aws_region }}.amazonaws.com/amazon-ssm-{{ aws_region }}/latest/linux_amd64/amazon-ssm-agent.rpm" && exit 0
+        [ "$attempt" -eq 5 ] && exit 1
+        sleep 15
+        pkill -x dnf 2>/dev/null || true
+        pkill -x rpm 2>/dev/null || true
+      done
+    creates: /usr/bin/amazon-ssm-agent
+  changed_when: true
+
+# Not started here — aws-control-plane/aws-node-pool's launch-time
+# `systemctl enable --now amazon-ssm-agent` already does that on every real
+# boot. Starting it now would only register this transient build instance
+# with SSM under its own identity for no benefit, and template-prep below
+# resets machine-id/cloud-init state anyway.

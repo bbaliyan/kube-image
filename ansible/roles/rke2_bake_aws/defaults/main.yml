@@ -1,0 +1,8 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# Always passed via --extra-vars by the invoking Packer template
+# (packer/aws/template.pkr.hcl, from var.aws_region). No real default —
+# the empty string fails loudly (a malformed S3 URL, 404 on dnf install)
+# rather than silently baking an agent for the wrong region or skipping
+# the install entirely.
+aws_region: ""

@@ -118,6 +118,9 @@ build {
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
       "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",
+      # rke2_bake_aws's amazon-ssm-agent install needs the region to build
+      # the correct regional S3 bucket URL.
+      "--extra-vars", "aws_region=${var.aws_region}",
     ]
   }
 }
