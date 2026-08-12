@@ -3,16 +3,28 @@
   "image": "kube-devenv:local",
   "name": "kube-image",
 
-  "initializeCommand": "mkdir -p ~/.ssh ~/.kube-compute",
+  "initializeCommand": "mkdir -p ~/.ssh ~/.kube-compute ~/.aws",
   "postCreateCommand": "bash .devcontainer/write-env.sh",
 
   "mounts": [
     "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,readonly",
-    "source=${localEnv:HOME}/.kube-compute,target=/root/.kube-compute,type=bind"
+    "source=${localEnv:HOME}/.kube-compute,target=/root/.kube-compute,type=bind",
+    // AWS: no kube-image-specific credential derivation needed (unlike the
+    // Proxmox PKR_VAR_* rewrite in write-env.sh) — Packer's amazon-ebs
+    // builder reads the standard AWS credential chain directly (env vars,
+    // this mounted ~/.aws, an assumed role), the same way the AWS CLI and
+    // Terraform's AWS provider do. Same mount kube-examples' devcontainer
+    // uses for the same reason.
+    "source=${localEnv:HOME}/.aws,target=/root/.aws,type=bind,readonly"
   ],
 
   "remoteEnv": {
-    "BASH_ENV": "/etc/kube-compute-env.sh"
+    "BASH_ENV": "/etc/kube-compute-env.sh",
+    // Resolved via the ~/.aws mount above (profile or access key) — matches
+    // kube-examples' devcontainer. Alternatively set
+    // AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in your shell profile before
+    // opening VS Code.
+    "AWS_PROFILE": "${localEnv:AWS_PROFILE}"
   },
 
   "remoteUser": "root",
