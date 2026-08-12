@@ -1,11 +1,30 @@
 #!/usr/bin/env bash
-# Writes /etc/kube-compute-env.sh, sourced by every shell (interactive via
-# ~/.bashrc, non-interactive via BASH_ENV) to load Proxmox credentials and
-# derive the Packer-specific PKR_VAR_* equivalents automatically — so
-# 'packer build' never needs proxmox_url/proxmox_api_token_id/
-# proxmox_api_token_secret set by hand.
+# Runs once per container create (devcontainer.json's postCreateCommand).
 set -euo pipefail
 
+# ---- normalize ~/.ssh permissions -------------------------------------------
+# The mount is not readonly specifically so this can run. On macOS/Linux/WSL2
+# the host directory already has correct perms, so this is a no-op there —
+# it's native Windows sources (NTFS bind-mounted via Docker Desktop, if ever
+# reached without going through WSL2 as devcontainer.json's own top comment
+# says to) this actually matters for: NTFS has no real Unix permission bits,
+# so keys mounted from it commonly surface inside the container as too-open
+# (or platform-dependent) modes, and ssh/git/Packer's SSH communicator all
+# refuse a private key that isn't (at most) 600. Ansible's SSH connections
+# during a Packer bake would fail the same way. Guarded with `|| true`:
+# ~/.ssh may be empty or contain files this glob doesn't match, and none of
+# that should block container creation.
+if [ -d ~/.ssh ]; then
+  chmod 700 ~/.ssh || true
+  find ~/.ssh -maxdepth 1 -type f ! -name '*.pub' -exec chmod 600 {} + 2>/dev/null || true
+  find ~/.ssh -maxdepth 1 -type f -name '*.pub' -exec chmod 644 {} + 2>/dev/null || true
+fi
+
+# ---- Writes /etc/kube-compute-env.sh, sourced by every shell (interactive
+# via ~/.bashrc, non-interactive via BASH_ENV) to load Proxmox credentials
+# and derive the Packer-specific PKR_VAR_* equivalents automatically — so
+# 'packer build' never needs proxmox_url/proxmox_api_token_id/
+# proxmox_api_token_secret set by hand.
 cat >/etc/kube-compute-env.sh <<'EOF'
 test -f /root/.kube-compute/proxmox && source /root/.kube-compute/proxmox
 test -f /root/.kube-compute/proxmox-endpoint && source /root/.kube-compute/proxmox-endpoint

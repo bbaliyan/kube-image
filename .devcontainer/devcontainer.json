@@ -1,4 +1,20 @@
 {
+  // Targets macOS, WSL2, and Windows+Docker Desktop. On Windows, open this
+  // repo FROM WITHIN a WSL2 distro's own filesystem (not a /mnt/c/... path)
+  // and launch VS Code with 'code .' there — i.e. "Reopen in WSL" before
+  // "Reopen in Container", the same order Microsoft's own devcontainer docs
+  // recommend for any Linux-container project. Opening a Windows-filesystem
+  // folder directly with Docker Desktop's Windows backend (no WSL involved)
+  // is NOT supported: ${localEnv:HOME} below only resolves on shells that
+  // set HOME (bash/WSL2; PowerShell 6+ sets it too, but cmd.exe and Explorer
+  // launches don't), and initializeCommand's bash syntax (mkdir -p) isn't
+  // valid under cmd.exe. Going through WSL2 sidesteps both: HOME resolves
+  // the same way it does on macOS/Linux, and file permissions on mounted
+  // keys are real Linux (ext4) permission bits, not an NTFS bind mount's
+  // simulated/often-ignored ones — SSH private keys need real 600 perms to
+  // work at all. UNVERIFIED against a real Windows/WSL2 machine — this
+  // environment has neither; confirm on one before relying on it.
+  //
   // renovate: datasource=docker depName=ghcr.io/bbaliyan/kube-devenv
   "image": "ghcr.io/bbaliyan/kube-devenv:0.8.0",
   "name": "kube-image",
@@ -7,15 +23,25 @@
   "postCreateCommand": "bash .devcontainer/write-env.sh",
 
   "mounts": [
-    "source=${localEnv:HOME}/.ssh,target=/root/.ssh,type=bind,readonly",
-    "source=${localEnv:HOME}/.kube-compute,target=/root/.kube-compute,type=bind",
+    // ${localEnv:HOME}${localEnv:USERPROFILE} is not a typo: on any given
+    // host only one of the two resolves to a non-empty string (HOME on
+    // macOS/Linux/WSL2, USERPROFILE on a native Windows shell), so
+    // concatenating both always yields exactly the one real path. Same
+    // trick applied to every mount below for the same reason.
+    //
+    // Not readonly (unlike kube-examples' otherwise-identical .ssh mount):
+    // write-env.sh below chmods the keys after mount, which a readonly bind
+    // mount would reject. Safe on macOS/Linux/WSL2, where the perms it sets
+    // already match what a normal ~/.ssh has.
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind",
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.kube-compute,target=/root/.kube-compute,type=bind",
     // AWS: no kube-image-specific credential derivation needed (unlike the
     // Proxmox PKR_VAR_* rewrite in write-env.sh) — Packer's amazon-ebs
     // builder reads the standard AWS credential chain directly (env vars,
     // this mounted ~/.aws, an assumed role), the same way the AWS CLI and
     // Terraform's AWS provider do. Same mount kube-examples' devcontainer
     // uses for the same reason.
-    "source=${localEnv:HOME}/.aws,target=/root/.aws,type=bind,readonly"
+    "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/root/.aws,type=bind,readonly"
   ],
 
   "remoteEnv": {
