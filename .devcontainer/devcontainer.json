@@ -1,6 +1,6 @@
 {
   // renovate: datasource=docker depName=ghcr.io/bbaliyan/kube-devenv
-  "image": "kube-devenv:local",
+  "image": "ghcr.io/bbaliyan/kube-devenv:0.8.0",
   "name": "kube-image",
 
   "initializeCommand": "mkdir -p ~/.ssh ~/.kube-compute ~/.aws",
