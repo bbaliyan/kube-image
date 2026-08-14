@@ -6,7 +6,7 @@
     ":dependencyDashboard"
   ],
   "labels": ["renovate"],
-  "enabledManagers": ["terraform", "github-actions"],
+  "enabledManagers": ["terraform", "github-actions", "devcontainer"],
   "packageRules": [
     {
       "description": "Batch routine patch updates into one weekly PR",
