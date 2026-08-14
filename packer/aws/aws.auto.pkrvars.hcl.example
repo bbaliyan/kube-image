@@ -7,8 +7,7 @@
 # this — if you need a specific pin, export PKR_VAR_k8s_version (etc.) at the
 # shell instead, which build.sh's fetch only fills in when unset.
 
-aws_region    = "us-east-1"
-instance_type = "t3.medium"
+aws_region = "us-east-1"
 
 # Required, no default — the CIDR range(s) the build host's traffic actually
 # arrives from, scoping the temporary security group's inbound SSH rule.
@@ -21,9 +20,15 @@ security_group_source_cidrs = ["203.0.113.0/24"]
 # subnet_id = "subnet-0123456789abcdef0"
 # vpc_id    = "vpc-0123456789abcdef0"   # find with: aws ec2 describe-subnets --subnet-ids <subnet_id> --query 'Subnets[0].VpcId' --output text
 
-# ami_architecture defaults to "x86_64" — override only for an
-# arm64/Graviton instance_type:
-# ami_architecture = "arm64"
+# instance_type/ami_architecture are deliberately left unset here too (both
+# default to an x86_64 build — "t3.medium"/"x86_64" — via variables.pkr.hcl),
+# for the same reason as k8s_version above: a var-file entry here would
+# outrank a PKR_VAR_instance_type/PKR_VAR_ami_architecture override at build
+# time, silently defeating an arm64 build (see README's "Building"). Pin
+# either only if this file should always build one fixed instance_type/
+# architecture and never the other via an env-var override:
+# instance_type    = "t3.medium"
+# ami_architecture = "x86_64"
 
 # extra_tags defaults to {} — cost-allocation/owner tags merged onto every
 # resource the build creates (see README's "Accounting tags"):

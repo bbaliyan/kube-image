@@ -49,11 +49,15 @@ packer init .
 ```
 
 This builds an x86_64 AMI (`ami_architecture`/`instance_type`'s defaults).
-For arm64, override both — `ami_architecture` alone isn't enough, since the
-default `instance_type` (`t3.medium`) can't launch an arm64 AMI:
+For arm64, override both as `PKR_VAR_*` environment variables — not
+`-var`/`-var-file` flags on the command line, which `build.sh` forwards to
+`packer init` as well as `packer build`, and `packer init` doesn't accept
+them (it would fail before the build even starts). `ami_architecture`
+alone isn't enough either way, since the default `instance_type`
+(`t3.medium`) can't launch an arm64 AMI:
 
 ```bash
-./build.sh . -var ami_architecture=arm64 -var instance_type=m7g.medium
+PKR_VAR_ami_architecture=arm64 PKR_VAR_instance_type=m7g.medium ./build.sh .
 ```
 
 Run both commands to produce one AMI of each architecture — they get
