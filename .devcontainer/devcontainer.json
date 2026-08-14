@@ -29,7 +29,7 @@
   // machine — this environment has neither.
   //
   // renovate: datasource=docker depName=ghcr.io/bbaliyan/kube-devenv
-  "image": "ghcr.io/bbaliyan/kube-devenv:0.8.0",
+  "image": "ghcr.io/bbaliyan/kube-devenv:0.8.2",
   "name": "kube-image",
 
   "initializeCommand": [".devcontainer/initialize"],
