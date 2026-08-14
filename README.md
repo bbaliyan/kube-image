@@ -83,10 +83,14 @@ packer init .
 
 ## Consuming a built image
 
-Both providers produce an image self-descriptively named
-`almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
-(AWS AMI names sanitize `k8s_version`'s `+` to `-`; see `packer/aws/README.md`).
-Point `kube-compute`'s node modules at it: Proxmox's
+Both providers produce a self-descriptively named image. Proxmox:
+`almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`.
+AWS adds an architecture segment, since one AWS build can target either
+x86_64 or arm64 (Proxmox only ever builds one architecture, so it doesn't
+need one):
+`almalinux10-<architecture>-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
+(AWS AMI names also sanitize `k8s_version`'s `+` to `-`; see
+`packer/aws/README.md`). Point `kube-compute`'s node modules at it: Proxmox's
 `proxmox-control-plane`/`proxmox-node-pool` via `proxmox_template_vm_id` (its
 numeric Proxmox VM ID); AWS's `aws-control-plane`/`aws-node-pool` via their
 existing `os_image_ami_id` variable. The name is documentation only —

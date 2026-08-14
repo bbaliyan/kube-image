@@ -42,11 +42,23 @@ current working directory, not the repo root.
 
 ```bash
 cp aws.auto.pkrvars.hcl.example aws.auto.pkrvars.hcl
-# edit aws.auto.pkrvars.hcl: aws_region, and subnet_id/ami_architecture if
-# your account needs non-default values
+# edit aws.auto.pkrvars.hcl: aws_region, security_group_source_cidrs, and
+# subnet_id if your account needs a non-default value
 packer init .
 ./build.sh .
 ```
+
+This builds an x86_64 AMI (`ami_architecture`/`instance_type`'s defaults).
+For arm64, override both — `ami_architecture` alone isn't enough, since the
+default `instance_type` (`t3.medium`) can't launch an arm64 AMI:
+
+```bash
+./build.sh . -var ami_architecture=arm64 -var instance_type=m7g.medium
+```
+
+Run both commands to produce one AMI of each architecture — they get
+distinct names (`local.image_name` in `template.pkr.hcl` includes the
+architecture) so a same-day build of one doesn't collide with the other.
 
 `k8s_version`/`cilium_version`/`argocd_version` don't need editing —
 `build.sh` fetches kube-platform's `platform/platform-versions/values.yaml`
@@ -104,34 +116,42 @@ revisit.
 
 ## AMI naming
 
-Self-descriptive, same convention as the Proxmox template's VM template
-name: `almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
+Self-descriptive: `almalinux10-<architecture>-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
 (with `k8s_version`'s `+` sanitized to `-`, since AWS AMI names don't allow
-`+`). Point `kube-compute`'s `aws-control-plane`/`aws-node-pool` modules at
-the resulting AMI ID via their existing `os_image_ami_id` variable. The name
-is documentation only — kube-compute performs no compatibility check
-against it.
+`+`) — the Proxmox template's VM template name follows the same convention
+minus the architecture segment, since Proxmox only ever builds one
+architecture. `<architecture>` is `var.ami_architecture` (`x86_64` or
+`arm64`), included so an x86_64 and an arm64 build on the same day don't
+compute the same name — AWS AMI names must be unique per account/region.
+Point `kube-compute`'s `aws-control-plane`/`aws-node-pool` modules at the
+resulting AMI ID via their existing `os_image_ami_id` variable. The name is
+documentation only — kube-compute performs no compatibility check against
+it (though the AMI's own architecture still has to match whatever instance
+type a consumer launches with).
 
-The AMI/snapshot/build-instance tags also carry `base-distro` and
-`source-ami-id` (the upstream AlmaLinux AMI this build actually resolved
-and cloned from) — since the base-image filter is `most_recent = true`, it
-can resolve differently build to build, so this is what traces a given
-build back to its actual source.
+The AMI/snapshot/build-instance tags also carry `architecture`, `base-distro`,
+and `source-ami-id` (the upstream AlmaLinux AMI this build actually
+resolved and cloned from) — since the base-image filter is
+`most_recent = true`, it can resolve differently build to build, so this is
+what traces a given build back to its actual source.
 
 ## Pruning old builds
 
 Every `packer build` leaves the previous AMI (and its backing snapshot)
 around — Packer has no build history or artifact retention of its own.
-`prune-images.sh` finds every self-owned AMI tagged `kube-image=true` in a
-region, keeps the N most recent (by AMI `CreationDate`), and deregisters
-the rest (deleting each one's backing EBS snapshot too). It never touches
-AMIs owned by another account, including the AlmaLinux Foundation's own
-published base images this build sources from.
+`prune-images.sh` finds every self-owned AMI tagged `kube-image=true` for
+one architecture in a region, keeps the N most recent (by AMI
+`CreationDate`), and deregisters the rest (deleting each one's backing EBS
+snapshot too). It never touches AMIs owned by another account, including
+the AlmaLinux Foundation's own published base images this build sources
+from. `--architecture` is required and prunes one architecture at a time —
+run it once per architecture you build, so pruning x86_64 builds can never
+delete the only arm64 AMI you have (or vice versa):
 
 ```bash
-./prune-images.sh --region us-east-1 --dry-run   # see what would be destroyed
-./prune-images.sh --region us-east-1             # keeps 3 by default, asks to confirm
-./prune-images.sh --region us-east-1 --keep 5 --yes   # non-interactive
+./prune-images.sh --region us-east-1 --architecture x86_64 --dry-run   # see what would be destroyed
+./prune-images.sh --region us-east-1 --architecture x86_64             # keeps 3 by default, asks to confirm
+./prune-images.sh --region us-east-1 --architecture arm64 --keep 5 --yes   # non-interactive
 ```
 
 Separately, `prune-orphaned-iam.sh` sweeps up temporary IAM roles/instance

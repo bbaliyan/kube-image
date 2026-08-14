@@ -37,7 +37,7 @@ variable "ami_architecture" {
 variable "ami_name" {
   type        = string
   default     = null
-  description = "Overrides the self-descriptive AMI name (almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>) computed automatically from k8s_version/cilium_version/argocd_version. Leave unset in normal use — only needed if AWS's AMI-name character restrictions ever reject the computed name for a future version string, or to disambiguate a rebuild on the same day."
+  description = "Overrides the self-descriptive AMI name (almalinux10-<architecture>-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>) computed automatically from ami_architecture/k8s_version/cilium_version/argocd_version. Leave unset in normal use — only needed if AWS's AMI-name character restrictions ever reject the computed name for a future version string, or to disambiguate a rebuild on the same day."
 }
 
 variable "extra_tags" {

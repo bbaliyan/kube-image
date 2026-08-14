@@ -27,13 +27,19 @@ locals {
   # AWS AMI names allow only [A-Za-z0-9()./_-] and spaces (no "+") — the same
   # reason packer/proxmox/template.pkr.hcl sanitizes k8s_version for its own
   # name/tag fields, even though Proxmox's own character set is different.
-  image_name = coalesce(var.ami_name, "${local.distro_slug}-kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}")
+  # var.ami_architecture ("x86_64"/"arm64") is folded in so an x86_64 and an
+  # arm64 build on the same day don't compute the same name — AWS AMI names
+  # must be unique per account/region, and without this a same-day arm64
+  # build would fail outright trying to reuse the x86_64 build's name.
+  image_name = coalesce(var.ami_name, "${local.distro_slug}-${var.ami_architecture}-kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}")
 
   # Applied to the AMI, its snapshot, the build instance, and its volumes
   # (var.extra_tags merged in second so it can add but not override).
   # source-ami-id matters because most_recent = true can resolve to a
   # different base AMI on every rebuild — without recording it, there'd be
-  # no way to trace a build back to what it actually came from.
+  # no way to trace a build back to what it actually came from. architecture
+  # lets prune-images.sh (and anything else querying by tag) tell an x86_64
+  # build apart from an arm64 one — see its --architecture flag.
   common_tags = merge({
     Name           = local.image_name
     kube-image     = "true"
@@ -42,11 +48,13 @@ locals {
     argocd-version = var.argocd_version
     build-date     = local.build_date
     base-distro    = local.distro_slug
+    architecture   = var.ami_architecture
     source-ami-id  = data.amazon-ami.almalinux10.id
   }, var.extra_tags)
   snapshot_tags = merge({
-    Name       = local.image_name
-    kube-image = "true"
+    Name         = local.image_name
+    kube-image   = "true"
+    architecture = var.ami_architecture
   }, var.extra_tags)
 }
 
