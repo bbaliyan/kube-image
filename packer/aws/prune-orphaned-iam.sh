@@ -7,6 +7,12 @@
 # it leaks the role. Upstream behavior, not fixable from this template; run
 # this periodically to sweep up what it leaves behind.
 #
+# template.pkr.hcl no longer self-provisions any IAM role (it dropped
+# temporary_iam_instance_profile_policy_document when the build switched
+# from SSM to direct SSH — see git history), so a build today can't create
+# a new orphan. This script only matters for cleaning up roles left over
+# from before that switch.
+#
 # Matches by RoleName prefix "packer-" AND the exact Description the plugin
 # sets ("Temporary role for Packer"), so it never touches an unrelated role.
 # IAM has no regions, so unlike prune-images.sh this isn't region-scoped.

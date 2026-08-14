@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 k8s_version: ""
 # Always passed via --extra-vars by the invoking Packer template
-# (packer/proxmox/template.pkr.hcl), pointing at build.sh's mktemp -d
-# render output. No real default — the empty string fails loudly (copy
-# module errors on a nonexistent src) rather than silently baking nothing.
+# (packer/aws/template.pkr.hcl or packer/proxmox/template.pkr.hcl), pointing
+# at build.sh's mktemp -d render output. No real default — the empty string
+# fails loudly (copy module errors on a nonexistent src) rather than
+# silently baking nothing.
 rendered_manifests_dir: ""
 
 # Also always passed via --extra-vars by template.pkr.hcl (build.sh renders
@@ -22,9 +23,10 @@ bake_install_rke2: true
 bake_copy_gitops_manifests: true
 bake_stage_capi_manifests: true
 
-# ansible.builtin.reboot's own defaults. Fine for Proxmox, which reconnects
-# over a direct LAN IP — cheap to retry fast. AWS overrides both in
-# playbook-aws.yml, since its SSM-tunneled reconnect is much more expensive
-# per attempt.
+# ansible.builtin.reboot's own defaults. Both providers' ansible provisioner
+# blocks set use_proxy = false (see each provider's template.pkr.hcl) and
+# both Packer builders connect over plain SSH directly to the build
+# instance's real IP, so a plain TCP retry after the mid-play reboot is
+# cheap either way — neither playbook needs to override these.
 bake_reboot_connect_timeout: 5
 bake_reboot_post_delay: 0

@@ -10,6 +10,11 @@
 aws_region    = "us-east-1"
 instance_type = "t3.medium"
 
+# Required, no default — the CIDR range(s) the build host's traffic actually
+# arrives from, scoping the temporary security group's inbound SSH rule.
+# Never 0.0.0.0/0. See README's "Prerequisites".
+security_group_source_cidrs = ["203.0.113.0/24"]
+
 # subnet_id/vpc_id left unset here — defaults to the account's default VPC.
 # If your account has no default VPC, set both (not just subnet_id, or
 # RunInstances fails with "No default VPC for this user"):

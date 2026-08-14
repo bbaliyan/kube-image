@@ -87,42 +87,48 @@ source "amazon-ebs" "rke2" {
   run_volume_tags = local.common_tags
 
   ssh_username = var.ssh_username
-  # Tunnels the build SSH session through AWS Systems Manager Session Manager
-  # instead of a direct connection to port 22 — no inbound security-group rule
-  # needed on the build instance, matching this project's no-SSH-inbound
-  # posture elsewhere (CLAUDE.md hard constraint #6's control-plane
-  # abstraction, and kube-compute's aws-control-plane/aws-node-pool modules,
-  # which already grant instances AmazonSSMManagedInstanceCore for the same
-  # reason). Requires the session-manager-plugin binary on the build host —
-  # see README.md.
-  ssh_interface = "session_manager"
+  # Direct SSH to the build instance over its private IP, using a
+  # Packer-generated ephemeral keypair (temporary_key_pair_type below) that
+  # never leaves this one build. This is a build-time-only choice — it does
+  # not affect how a real cluster node from the resulting AMI is reached
+  # afterward (still SSM-only, no inbound port 22, per CLAUDE.md hard
+  # constraint #6); this instance exists only for the duration of one
+  # `packer build` and is torn down at the end of it.
+  #
+  # Switched from ssh_interface = "session_manager" (SSM) because tunneling
+  # every Ansible SSH round-trip through an SSM session — and worse,
+  # re-establishing that session after rke2_bake_common's mid-play reboot,
+  # an AWS API call rather than a cheap TCP retry — measured at ~19min vs
+  # ~4min on Proxmox's direct-SSH path for an otherwise-identical bake.
+  #
+  # "private_ip" rather than Packer's default ("public_ip") because this
+  # template never requests a public IP for the build instance (no
+  # associate_public_ip_address below) — plenty of networks only ever
+  # expose a private IP, reachable from the build host over a VPN or
+  # similar, and that's all direct SSH actually needs. If your build host
+  # can only reach the instance via a public IP instead (a public subnet +
+  # IGW route), set associate_public_ip_address = true and switch this to
+  # ssh_interface = "public_ip". If the build host has no direct network
+  # path to the instance at all, fall back to
+  # ssh_interface = "session_manager" — no inbound port and no build-host
+  # reachability needed, at the cost of the slowdown described above.
+  ssh_interface = "private_ip"
+  # 0.0.0.0/0 is never an acceptable default for an inbound SG rule, so this
+  # is a required variable (no default) rather than something this template
+  # guesses at — the reachable range is consumer-specific (an environment
+  # value that can't be hardcoded here per CLAUDE.md hard constraint #1).
+  # Set it in your own gitignored aws.auto.pkrvars.hcl; see
+  # aws.auto.pkrvars.hcl.example.
+  temporary_security_group_source_cidrs = var.security_group_source_cidrs
   # AlmaLinux 10's OpenSSH drops the legacy "ssh-rsa" (SHA-1) signature
   # algorithm under RHEL's default crypto-policy — the only RSA scheme
   # Packer's SSH client offers for the default RSA temporary keypair, so
   # every publickey attempt fails outright. ed25519 isn't affected.
   temporary_key_pair_type = "ed25519"
-  # Self-provisions a throwaway instance profile scoped to exactly the
-  # Session Manager permissions the build needs, so building doesn't depend
-  # on a pre-existing, account-specific instance profile ARN (which would be
-  # an environment value this public repo can't hardcode). Destroyed by
-  # Packer automatically at the end of the build, same lifecycle as the
-  # instance itself.
-  temporary_iam_instance_profile_policy_document {
-    Version = "2012-10-17"
-    Statement {
-      Effect = "Allow"
-      Action = [
-        "ssmmessages:CreateControlChannel",
-        "ssmmessages:CreateDataChannel",
-        "ssmmessages:OpenControlChannel",
-        "ssmmessages:OpenDataChannel",
-        "ssm:UpdateInstanceInformation",
-        "ec2messages:GetMessages",
-        "ec2messages:AcknowledgeMessage",
-      ]
-      Resource = ["*"]
-    }
-  }
+  # This build-time keypair is unrelated to whatever key pair (or none, if
+  # SSM-only) a consumer later launches an EC2 instance from this AMI with —
+  # Packer's temporary key only authenticates its own build session and is
+  # never baked into the image's authorized_keys.
 }
 
 build {
@@ -132,18 +138,16 @@ build {
   provisioner "ansible" {
     playbook_file = "../../ansible/playbook-aws.yml"
     user          = var.ssh_username
-    # packer/proxmox/template.pkr.hcl sets use_proxy = false here because
-    # rke2_bake_common's mid-play reboot (os-prep | reboot after the OS
-    # update) kills Packer's own SSH proxy adapter, and ansible-playbook can
-    # only recover by dialing the VM's real, LAN-reachable IP directly. That
-    # fallback doesn't exist on AWS with ssh_interface = "session_manager"
-    # above — there is no direct IP path to the build instance to fall back
-    # to (that's the point of routing over SSM instead of opening port 22),
-    # so use_proxy stays at its default (true): Packer's own SSH proxy is
-    # the only path in, and its reconnect logic re-establishes the SSM
-    # tunnel after the reboot. Confirmed working on a real build, just slow
-    # by default — see rke2_bake_common's bake_reboot_connect_timeout/
-    # bake_reboot_post_delay (tuned down in playbook-aws.yml).
+    # Same reasoning as packer/proxmox/template.pkr.hcl: rke2_bake_common's
+    # mid-play reboot (os-prep | reboot after the OS update) kills Packer's
+    # own SSH proxy adapter, and ansible.builtin.reboot's reconnect/retry
+    # logic can't recover a dead proxy, only a real socket. Now that the
+    # build instance is reachable at a real IP directly (ssh_interface =
+    # "private_ip" above) instead of only through an SSM tunnel, use_proxy
+    # = false lets ansible-playbook dial that IP directly, so a plain TCP
+    # retry succeeds once the instance is back up — the same path Proxmox's
+    # direct-LAN-IP reconnect uses.
+    use_proxy = false
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
       "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",

@@ -23,6 +23,11 @@ variable "vpc_id" {
   description = "VPC the build instance launches into. Defaults to null, which only works if the account has a default VPC — Packer doesn't reliably infer vpc_id from subnet_id alone, so an account with no default VPC needs both set or RunInstances fails with \"No default VPC for this user\". Find it with: aws ec2 describe-subnets --subnet-ids <subnet_id> --query 'Subnets[0].VpcId' --output text"
 }
 
+variable "security_group_source_cidrs" {
+  type        = list(string)
+  description = "CIDR block(s) allowed inbound SSH (port 22) to the build instance, via Packer's temporary_security_group_source_cidrs — the range from which the build host actually reaches the build instance's IP (private or public, per ssh_interface in template.pkr.hcl). No default: 0.0.0.0/0 is never an acceptable fallback for an inbound rule, so an unset value must fail validation loudly rather than silently opening the instance to the internet."
+}
+
 variable "ami_architecture" {
   type        = string
   default     = "x86_64"

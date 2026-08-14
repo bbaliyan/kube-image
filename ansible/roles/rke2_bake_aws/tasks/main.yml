@@ -6,22 +6,32 @@
 # playbook, so the provider is known at build-invocation time, not runtime.
 #
 # The AlmaLinux 10 AMI's own cloud-init/ENA/NVMe drivers are already correct
-# out of the box, and AWS never hot-adds a vCPU to a running instance the
-# way Proxmox/KVM does (rke2_bake_proxmox's reason for a real task, the
-# hot-vCPU udev rule) — so the one genuinely AWS-specific thing this bake
-# needs is amazon-ssm-agent, below.
+# out of the box, so the one genuinely AWS-specific thing this bake needs is
+# amazon-ssm-agent, below.
 
 # kube-compute's aws-control-plane/aws-node-pool modules rely on SSM as their
 # entire operator-access path (break-glass shell, verb-scripts, kubeconfig
 # fetch — see aws-control-plane/main.tf's connectivity_user_data) with no
 # other transport at all: this project's no-inbound-SSH posture (CLAUDE.md
 # hard constraint #6) means there is no fallback if SSM isn't there. Those
-# modules' own launch-time `systemctl enable --now amazon-ssm-agent` only
-# assumes the AlmaLinux Foundation AMI ships the agent pre-installed
-# ("likely" per that module's own comment, not confirmed) and swallows
-# failure (`|| true`) if it doesn't — which would silently and permanently
-# break operator access on every node with no error surfaced anywhere.
-# Install it explicitly at bake time instead of relying on that assumption.
+# modules' own launch-time `systemctl enable --now amazon-ssm-agent` swallows
+# failure (`|| true`) if the package isn't there — which would silently and
+# permanently break operator access on every node with no error surfaced
+# anywhere.
+#
+# The base AlmaLinux 10 AMI does already ship amazon-ssm-agent — this
+# project's own AWS builds connected to the build instance over SSM
+# (ssh_interface = "session_manager") before the switch to direct SSH (see
+# packer/aws/template.pkr.hcl), and that could only have worked if the
+# agent were already installed and running: Packer's very first connection
+# to the instance goes over the SSM session, so there is no earlier point at
+# which this task could have installed it for that path to succeed. Kept
+# here anyway as an explicit, idempotent guarantee (`creates:` skips it when
+# already present, so this is a no-op on every real build) rather than a
+# silent assumption baked only into kube-compute's launch-time script — if
+# a future AlmaLinux 10 point release ever drops the package, this is what
+# catches it, loudly, at bake time instead of leaving every node it's
+# skipped on unreachable.
 - name: aws | install amazon-ssm-agent (retry + self-heal on lock contention)
   ansible.builtin.shell:
     cmd: |

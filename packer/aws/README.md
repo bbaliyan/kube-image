@@ -11,16 +11,25 @@ base image; Proxmox doesn't).
   `~/.aws/credentials`, an assumed role, etc.) — Packer's `amazon-ebs`
   builder reads them the same way the AWS CLI and Terraform's AWS provider
   do. No kube-image-specific credential setup.
-- The [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
-  installed on the build host — the Ansible provisioner connects to the
-  build instance over AWS Systems Manager Session Manager
-  (`ssh_interface = "session_manager"` in `template.pkr.hcl`), not a direct
-  connection to port 22. This means the build instance needs no inbound
-  security-group rule at all, matching this project's no-SSH-inbound
-  posture elsewhere; the IAM permissions Session Manager itself needs are
-  self-provisioned per build (see `template.pkr.hcl`'s
-  `temporary_iam_instance_profile_policy_document` — no pre-existing
-  instance profile required).
+- The build host must be able to reach the build instance's IP (private, per
+  `ssh_interface = "private_ip"` in `template.pkr.hcl`) on port 22 directly —
+  Packer connects over plain SSH using a per-build ephemeral keypair
+  (`temporary_key_pair_type`; destroyed automatically at the end of the
+  build) and a temporary security group scoped to `var.security_group_source_cidrs`
+  (required, no default — set it to whatever CIDR range the build host's
+  traffic actually arrives from; never `0.0.0.0/0`). This is a
+  build-time-only choice — it does not change how a real cluster node
+  provisioned from the resulting AMI is reached at runtime (still SSM-only,
+  no inbound port 22; see "amazon-ssm-agent" below and CLAUDE.md hard
+  constraint #6). If the build instance instead needs a public IP to be
+  reachable, set `associate_public_ip_address = true` and
+  `ssh_interface = "public_ip"` in `template.pkr.hcl`. If the build host has
+  no direct network path to the instance at all, switch back to
+  `ssh_interface = "session_manager"` — slower (measured ~19min vs ~4min for
+  an otherwise-identical Proxmox bake, mostly from Ansible's per-task SSH
+  round-trips and the mid-bake reboot having to re-establish an SSM session
+  instead of a cheap TCP retry) but needs no inbound port and no
+  build-host-reachability requirement at all.
 - `aws` CLI, `helm`, and `python3` with `PyYAML` on the build host (same
   requirements `packer/proxmox/build.sh` has, minus `clusterctl` — this
   template doesn't stage a CAPI/CAPMOX install manifest; see "Scope" below).
@@ -126,11 +135,17 @@ published base images this build sources from.
 ```
 
 Separately, `prune-orphaned-iam.sh` sweeps up temporary IAM roles/instance
-profiles that a failed Packer cleanup left behind — packer-plugin-amazon
-intermittently fails to delete its temp role with `Cannot delete entity,
-must detach all policies first` (an IAM eventual-consistency race in the
-plugin, harmless to the built AMI, but it does leak a role each time). IAM
-has no regions, so unlike `prune-images.sh` this isn't region-scoped:
+profiles that a failed Packer cleanup left behind. This only ever happened
+while the build used `temporary_iam_instance_profile_policy_document` (the
+SSM-transport era of this template — see git history) — packer-plugin-amazon
+intermittently failed to delete its self-provisioned temp role with
+`Cannot delete entity, must detach all policies first` (an IAM
+eventual-consistency race in the plugin, harmless to the built AMI, but it
+did leak a role each time). The current template no longer self-provisions
+any IAM role at all, so a build today can't create a new orphan — this
+script is only useful for cleaning up roles left over from before that
+switch. IAM has no regions, so unlike `prune-images.sh` this isn't
+region-scoped:
 
 ```bash
 ./prune-orphaned-iam.sh --dry-run   # see what would be deleted

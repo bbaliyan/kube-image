@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 # Provider-agnostic bake tasks — same AlmaLinux 10 base image, same OS-prep/
 # RKE2-install/template-cleanup steps regardless of which provider's Packer
-# template invokes this role. Provider-specific tasks (e.g. Proxmox's hot-vCPU
-# udev rule) live in a separate rke2_bake_<provider> role instead, included
-# alongside this one by that provider's own playbook — see
-# ansible/playbook-proxmox.yml for the Proxmox example.
+# template invokes this role. Provider-specific tasks (e.g. AWS's
+# amazon-ssm-agent install, see rke2_bake_aws) live in a separate
+# rke2_bake_<provider> role instead, included alongside this one by that
+# provider's own playbook. Proxmox currently has no provider-specific tasks
+# at all, so ansible/playbook-proxmox.yml includes only this role.
 
 - name: os-prep | inotify limits
   ansible.builtin.copy:
@@ -211,9 +212,10 @@
     creates: /usr/lib/systemd/system/rke2-agent.service
   when: bake_install_rke2
 
-# Pre-rendered on the Packer build host (packer/proxmox/build.sh runs `helm
-# template` there, not here) and copied in as plain files — this VM never
-# runs helm itself or reaches a chart repo. node-bootstrap applies whichever
+# Pre-rendered on the Packer build host (each provider's build.sh — e.g.
+# packer/proxmox/build.sh — runs `helm template` there, not here) and copied
+# in as plain files — this VM never runs helm itself or reaches a chart
+# repo. node-bootstrap applies whichever
 # of these are relevant to a given cluster at first boot (a per-cluster
 # runtime decision, e.g. CNI choice/GitOps enablement — unrelated to whether
 # the file exists on this template).
@@ -240,12 +242,14 @@
 
 # capi-install.yaml (the concatenated CAPI core + CAPMOX install manifest,
 # rendered on the build host by build.sh's render_capi_manifests()) is baked
-# into this one image unconditionally. Whether a given cluster actually
-# needs it (cluster_autoscaler_enabled) is a per-cluster runtime decision
-# made at bootstrap.sh/terraform-apply time, same as GitOps enablement
-# above — this role bakes it in regardless (gated only on
-# bake_stage_capi_manifests, a defaults/main.yml toggle, not a
-# cluster-level one).
+# into the Proxmox image unconditionally — playbook-proxmox.yml leaves
+# bake_stage_capi_manifests at its default (true). Whether a given cluster
+# actually needs it (cluster_autoscaler_enabled) is a per-cluster runtime
+# decision made at bootstrap.sh/terraform-apply time, same as GitOps
+# enablement above — this role bakes it in regardless of that, gated only
+# on bake_stage_capi_manifests (a build-time toggle, not a cluster-level
+# one). AWS has no CAPI/CAPMOX equivalent yet, so playbook-aws.yml sets
+# bake_stage_capi_manifests: false and this task is skipped there.
 - name: capi | copy the rendered CAPI install manifest
   ansible.builtin.copy:
     src: "{{ rendered_capi_manifests_dir }}/capi-install.yaml"
