@@ -6,4 +6,3 @@
   become: true
   roles:
     - rke2_bake_common
-    - rke2_bake_proxmox

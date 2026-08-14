@@ -9,10 +9,13 @@ launch-time concern (`kube-compute`'s `node-bootstrap` module), not baked here.
 Ansible is split into a provider-agnostic `rke2_bake_common` role (OS prep,
 RKE2 install, template cleanup — the same regardless of provider) plus a thin
 `rke2_bake_<provider>` role for whatever's genuinely provider-specific (e.g.
-`rke2_bake_proxmox`'s hot-vCPU udev rule). Each provider gets its own Packer
-template and its own playbook (`ansible/playbook-<provider>.yml`) that
-includes both roles — the provider is known at build-invocation time, so
-there's no runtime `node_provider` conditional anywhere.
+`rke2_bake_aws`'s `amazon-ssm-agent` install). Each provider gets its own
+Packer template and its own playbook (`ansible/playbook-<provider>.yml`) that
+includes `rke2_bake_common` plus its own provider role, if it has one —
+Proxmox currently has no provider-specific tasks at all, so
+`playbook-proxmox.yml` includes only `rke2_bake_common`. The provider is
+known at build-invocation time either way, so there's no runtime
+`node_provider` conditional anywhere.
 
 ## Providers
 
@@ -42,8 +45,9 @@ committed (`.gitignore`).
 Standard AWS credential chain (env vars, `~/.aws/credentials`, an assumed
 role, etc.) — the same way the AWS CLI and Terraform's AWS provider resolve
 credentials. Nothing kube-image-specific to set up beyond what
-`packer/aws/README.md`'s prerequisites list (notably the Session Manager
-plugin, used instead of a direct SSH connection to the build instance).
+`packer/aws/README.md`'s prerequisites list (notably that the build host
+needs a direct network path to the build instance on port 22, and a
+`security_group_source_cidrs` value scoping who's allowed to reach it).
 
 ## Building
 
@@ -65,12 +69,14 @@ packer init .
 
 **AWS** needs no seed step — it builds from the AlmaLinux OS Foundation's own
 published AlmaLinux 10 AMI directly. See `packer/aws/README.md` for the full
-prerequisites (notably the Session Manager plugin).
+prerequisites (notably `security_group_source_cidrs`, required, and network
+reachability to the build instance).
 
 ```bash
 cd packer/aws
 cp aws.auto.pkrvars.hcl.example aws.auto.pkrvars.hcl
-# edit aws.auto.pkrvars.hcl: aws_region, and subnet_id/ami_architecture if needed
+# edit aws.auto.pkrvars.hcl: aws_region, security_group_source_cidrs, and
+# subnet_id/ami_architecture if needed
 packer init .
 ./build.sh .
 ```
