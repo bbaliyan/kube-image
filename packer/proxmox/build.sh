@@ -33,8 +33,16 @@ fi
 # script's own Packer vars) even though it's the same underlying credentials.
 # Re-derive here too so a plain './build.sh .' works right after
 # kube-proxmox-login, same as the PKR_VAR_* derivation above.
+#
+# NOT the same "+/api2/json" transform as PKR_VAR_proxmox_url above: that
+# suffix is bpg/proxmox's own convention, but CAPMOX's Go client (ionos-cloud/
+# cluster-api-provider-proxmox) appends "/api2/json" itself when it builds API
+# calls. Suffixing it here too doubled the path — confirmed on a real apply,
+# capmox-controller-manager crashed at startup unable to reach the Proxmox API
+# ("Get https://<host>:8006/api2/json/api2/json/version: ..."). PROXMOX_URL
+# must be the bare Proxmox base URL.
 if [ -n "${PROXMOX_VE_ENDPOINT:-}" ]; then
-  export PROXMOX_URL="${PROXMOX_VE_ENDPOINT}/api2/json"
+  export PROXMOX_URL="${PROXMOX_VE_ENDPOINT}"
 fi
 if [ -n "${PROXMOX_VE_API_TOKEN:-}" ]; then
   export PROXMOX_TOKEN="${PROXMOX_VE_API_TOKEN%%=*}"
@@ -108,7 +116,29 @@ render_capi_manifests() {
   clusterctl generate provider --infrastructure "proxmox:${PKR_VAR_capmox_version}" \
     --write-to "${out_dir}/01-capmox.yaml"
 
-  cat "${out_dir}"/*.yaml >"${out_dir}/capi-install.yaml"
+  # A plain `cat` here previously produced a broken capi-install.yaml:
+  # clusterctl's --write-to output for each provider doesn't end with a
+  # trailing `---`, so the last document of 00-capi-core.yaml (a
+  # ValidatingWebhookConfiguration) ran straight into the first document of
+  # 01-capmox.yaml (a Namespace) with no document boundary between them.
+  # YAML has no concept of two mappings appearing back-to-back at the top
+  # level outside a stream separator, so the parser folded them into one
+  # mapping — apiVersion/kind/metadata from the Namespace document
+  # overwrote the webhook config's (duplicate keys, last wins), while
+  # `webhooks:` from the first document survived as a stray key. The
+  # apiserver then rejected it: "Namespace ... strict decoding error:
+  # unknown field \"webhooks\"" (found live on a real apply — see
+  # kube-claude's cluster-autoscaler-proxmox-capi plan). Emitting an
+  # explicit `---` before each file's contents guarantees a document
+  # boundary at every seam regardless of whether the source file ends
+  # with one of its own.
+  local combined
+  combined="$(mktemp)"
+  for f in "${out_dir}"/*.yaml; do
+    printf -- '---\n' >>"${combined}"
+    cat "$f" >>"${combined}"
+  done
+  mv "${combined}" "${out_dir}/capi-install.yaml"
 }
 
 # ---- Genesis manifest render (Packer build host, not the VM being baked) --

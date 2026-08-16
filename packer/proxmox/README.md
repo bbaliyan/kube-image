@@ -30,7 +30,7 @@ tofu apply \
   -var proxmox_node=t630 \
   -var disk_datastore_id=nvme-pool \
   -var iso_datastore_id=local \
-  -var proxmox_ssh_address=pve.local
+  -var proxmox_ssh_address=pve.lan
 ```
 
 **No SSH key set up?** Pass a password instead — override `proxmox_ssh_user`
@@ -43,7 +43,7 @@ tofu apply \
   -var proxmox_node=t630 \
   -var disk_datastore_id=nvme-pool \
   -var iso_datastore_id=local \
-  -var proxmox_ssh_address=pve.local \
+  -var proxmox_ssh_address=pve.lan \
   -var proxmox_ssh_user=root \
   -var proxmox_ssh_password="$(read -srp 'PVE SSH password: ' p && echo "$p")"
 ```

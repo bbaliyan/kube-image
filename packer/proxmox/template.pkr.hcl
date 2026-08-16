@@ -114,7 +114,7 @@ build {
     # indefinitely. use_proxy=false makes ansible-playbook dial the VM's real IP
     # directly instead, so a plain TCP retry actually succeeds once the VM is
     # back up. Requires the Packer build host to reach the VM's IP directly
-    # (true here -- same LAN as pve.local).
+    # (true here -- same LAN as the Proxmox host).
     use_proxy = false
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
