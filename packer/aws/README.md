@@ -8,7 +8,12 @@ step needed, unlike Proxmox.
 
 - AWS credentials in the standard credential chain (env vars,
   `~/.aws/credentials`, an assumed role, etc.) — same as the AWS CLI/
-  Terraform's AWS provider.
+  Terraform's AWS provider. If your account uses AWS SSO, run
+  `aws sso login` yourself first (set `AWS_PROFILE` beforehand if you use a
+  named profile). `kube-cloud-login` (from the devcontainer) does not work
+  here — it infers the provider from a selected cluster in a `kube-compute`
+  consumer repo's `live/<provider>/...` path, and this repo has no cluster
+  to select.
 - The build host must reach the build instance's private IP on port 22
   directly (Packer connects via a per-build ephemeral keypair and a
   temporary security group scoped to `var.security_group_source_cidrs`,
