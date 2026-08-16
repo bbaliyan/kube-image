@@ -5,14 +5,10 @@
   gather_facts: true
   become: true
   vars:
-    # AWS's node pool comes back as a fixed-size ASG (no cluster-autoscaler
-    # integration yet), so this image never needs the CAPI/CAPMOX install
-    # manifest rke2_bake_common's capi-related tasks stage for Proxmox's
-    # cluster-autoscaler path.
-    # Overriding the role default (true) here, rather than passing
-    # rendered_capi_manifests_dir at all, keeps packer/aws/build.sh from
-    # having to render (or fake) a CAPMOX-flavored manifest that has no AWS
-    # equivalent.
+    # AWS's node pool comes back as a fixed-size ASG with no
+    # cluster-autoscaler integration yet, so this image never needs the
+    # CAPI/CAPMOX manifest — overriding the role default here keeps
+    # packer/aws/build.sh from having to render (or fake) one.
     bake_stage_capi_manifests: false
   roles:
     - rke2_bake_common

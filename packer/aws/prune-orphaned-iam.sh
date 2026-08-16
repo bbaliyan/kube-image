@@ -2,25 +2,19 @@
 # Deletes orphaned temporary IAM roles/instance profiles left behind by a
 # failed Packer cleanup. packer-plugin-amazon deletes its temp role's inline
 # policy and the role itself back-to-back with no wait for IAM's eventual
-# consistency, so the role delete intermittently fails with "Cannot delete
+# consistency, so the delete intermittently fails with "Cannot delete
 # entity, must detach all policies first" — harmless to the built AMI, but
-# it leaks the role. Upstream behavior, not fixable from this template; run
-# this periodically to sweep up what it leaves behind.
+# it leaks the role. Upstream behavior, not fixable here.
 #
-# template.pkr.hcl no longer self-provisions any IAM role (it dropped
-# temporary_iam_instance_profile_policy_document when the build switched
-# from SSM to direct SSH — see git history), so a build today can't create
-# a new orphan. This script only matters for cleaning up roles left over
-# from before that switch.
-#
-# Matches by RoleName prefix "packer-" AND the exact Description the plugin
-# sets ("Temporary role for Packer"), so it never touches an unrelated role.
+# Only relevant to builds from before this template switched from SSM to
+# direct SSH (it no longer self-provisions any IAM role, so a build today
+# can't create a new orphan). Matches by RoleName prefix "packer-" and the
+# exact description the plugin sets, so it never touches an unrelated role.
 # IAM has no regions, so unlike prune-images.sh this isn't region-scoped.
 #
 # Usage: ./prune-orphaned-iam.sh [--older-than-minutes N] [--dry-run] [--yes]
 #   --older-than-minutes  Only touch roles created at least this long ago, so
-#                         a build running concurrently in another terminal is
-#                         never a target (default: 60)
+#                         a build running concurrently is never a target (default: 60)
 #   --dry-run             List what would be deleted, change nothing
 #   --yes                 Skip the confirmation prompt
 set -euo pipefail
@@ -105,8 +99,7 @@ for role_name in "${DELETE_LIST[@]}"; do
     aws iam delete-role-policy --role-name "$role_name" --policy-name "$policy_name"
   done
 
-  # The plugin names the instance profile identically to the role (both are
-  # the same generated "packer-<uuid>" string), so reuse role_name here too.
+  # The plugin names the instance profile identically to the role.
   if aws iam get-instance-profile --instance-profile-name "$role_name" >/dev/null 2>&1; then
     echo "  Detaching role from instance profile ${role_name}..."
     aws iam remove-role-from-instance-profile \

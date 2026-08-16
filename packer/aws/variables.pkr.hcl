@@ -2,72 +2,78 @@
 
 variable "aws_region" {
   type        = string
-  description = "AWS region to build the AMI in, e.g. us-east-1. Standard AWS credential chain (env vars, ~/.aws/credentials, an assumed role, etc.) supplies the credentials themselves — Packer's amazon-ebs builder reads them the same way the AWS CLI/Terraform's AWS provider do, nothing kube-image-specific to configure."
+  description = "AWS region to build the AMI in, e.g. us-east-1."
 }
 
 variable "instance_type" {
   type        = string
   default     = "t3.medium"
-  description = "EC2 instance type for the build/bake instance. Only needs to be large enough to run the bake role's dnf update + RKE2 install in reasonable time — unrelated to the instance type a consumer later launches from the resulting AMI."
+  description = "EC2 instance type for the build instance. Unrelated to the instance type a consumer later launches from the resulting AMI."
 }
 
 variable "subnet_id" {
   type        = string
   default     = null
-  description = "Subnet the build instance launches into. Defaults to null, which leaves subnet selection to Packer/AWS's own default-VPC behavior (matches this project's default-VPC fallback used elsewhere, e.g. kube-compute's node modules) — set explicitly if the build host's account has no default VPC, or to build in a specific subnet."
+  description = "Subnet the build instance launches into. Defaults to null (the account's default VPC) — set explicitly if there isn't one, or to build in a specific subnet."
 }
 
 variable "vpc_id" {
   type        = string
   default     = null
-  description = "VPC the build instance launches into. Defaults to null, which only works if the account has a default VPC — Packer doesn't reliably infer vpc_id from subnet_id alone, so an account with no default VPC needs both set or RunInstances fails with \"No default VPC for this user\". Find it with: aws ec2 describe-subnets --subnet-ids <subnet_id> --query 'Subnets[0].VpcId' --output text"
+  description = "VPC the build instance launches into. Defaults to null, which only works with a default VPC — Packer can't infer vpc_id from subnet_id alone. Find it with: aws ec2 describe-subnets --subnet-ids <subnet_id> --query 'Subnets[0].VpcId' --output text"
 }
 
 variable "security_group_source_cidrs" {
   type        = list(string)
-  description = "CIDR block(s) allowed inbound SSH (port 22) to the build instance, via Packer's temporary_security_group_source_cidrs — the range from which the build host actually reaches the build instance's IP (private or public, per ssh_interface in template.pkr.hcl). No default: 0.0.0.0/0 is never an acceptable fallback for an inbound rule, so an unset value must fail validation loudly rather than silently opening the instance to the internet."
+  description = "CIDR block(s) allowed inbound SSH to the build instance. No default — 0.0.0.0/0 is never an acceptable fallback for an inbound rule."
 }
 
 variable "ami_architecture" {
   type        = string
   default     = "x86_64"
-  description = "CPU architecture to filter the AlmaLinux 10 base AMI on and to build for — must match instance_type's supported architecture (e.g. \"arm64\" for Graviton instance types like m7g.medium). Same filter dimension kube-compute's aws-control-plane data.tf derives dynamically from the launch instance_type; kept as a plain variable here since a Packer build only ever targets one architecture per invocation, not a runtime-selected one."
+  description = "CPU architecture to build for — must match instance_type's supported architecture (e.g. arm64 for Graviton types like m7g.medium)."
 }
 
 variable "ami_name" {
   type        = string
   default     = null
-  description = "Overrides the self-descriptive AMI name (almalinux10-<architecture>-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>) computed automatically from ami_architecture/k8s_version/cilium_version/argocd_version. Leave unset in normal use — only needed if AWS's AMI-name character restrictions ever reject the computed name for a future version string, or to disambiguate a rebuild on the same day."
+  description = "Overrides the self-descriptive computed AMI name (see README.md's \"AMI naming\"). Leave unset in normal use."
+}
+
+variable "region_replicas" {
+  type        = list(string)
+  default     = []
+  description = "Additional AWS regions to copy the built AMI into (see README.md's \"Multi-region replication\"). Do not include aws_region itself. Each destination region needs ec2:CopyImage/CopySnapshot permissions and must already be enabled for the account."
 }
 
 variable "extra_tags" {
   type        = map(string)
   default     = {}
-  description = "Extra tags (e.g. cost-center/owner for accounting) merged onto every AWS resource this build creates: the AMI, its snapshot, the temporary build instance, and the build instance's EBS volumes — not just the AMI. Merged on top of, and can't override, this template's own fixed tags (Name/kube-image/k8s-version/etc. — see template.pkr.hcl's local.common_tags)."
+  description = "Extra tags (e.g. cost-center/owner) merged onto every resource this build creates. Can't override this template's own fixed tags."
 }
 
 variable "ssh_username" {
   type        = string
   default     = "ec2-user"
-  description = "SSH user Packer's communicator and the Ansible provisioner both connect as — AWS's standard cloud-init default for RHEL-family AMIs. Not the same as Proxmox's seed template user (\"almalinux\"), which is specific to that custom-built image."
+  description = "SSH user Packer and the Ansible provisioner both connect as — AWS's standard default for RHEL-family AMIs."
 }
 
 variable "k8s_version" {
   type        = string
-  description = "RKE2 release string to bake, e.g. v1.36.1+rke2r1. Same neutral naming convention as kube-compute's k8s_version variable — no distro-specific variable name. Resolved automatically by build.sh from kube-platform's platform/platform-versions/values.yaml (k8sVersion) — do not set this in aws.auto.pkrvars.hcl (an auto.pkrvars.hcl entry outranks build.sh's PKR_VAR_k8s_version export, silently defeating the live resolution); override at the shell instead if you need a specific pin."
+  description = "RKE2 release string to bake, e.g. v1.36.1+rke2r1. Resolved automatically by build.sh — do not set in aws.auto.pkrvars.hcl, it silently outranks build.sh's fetch."
 }
 
 variable "cilium_version" {
   type        = string
-  description = "Cilium Helm chart version. Genesis-installs this pinned chart directly (see helm-values/cilium-values.yaml) — not RKE2's own rke2-cilium HelmChart CRD — into /opt/kube-compute/manifests/cilium.yaml on the AMI, for node-bootstrap to apply at first boot. Resolved automatically by build.sh from kube-platform's platform/platform-versions/values.yaml (ciliumVersion); same do-not-set-in-aws.auto.pkrvars.hcl caveat as k8s_version applies."
+  description = "Cilium Helm chart version, genesis-installed into /opt/kube-compute/manifests/cilium.yaml. Resolved automatically by build.sh — same do-not-set caveat as k8s_version."
 }
 
 variable "argocd_version" {
   type        = string
-  description = "Argo CD Helm chart version. Genesis-installs this pinned chart (see helm-values/argocd-values.yaml) into /opt/kube-compute/manifests/00-argocd.yaml on the AMI; only needs to produce *a* working Argo CD — kube-platform's own bootstrap/templates/argocd-app.yaml carries the consumer's chosen ongoing version afterward. Resolved automatically by build.sh from kube-platform's platform/platform-versions/values.yaml (argocdVersion); same do-not-set-in-aws.auto.pkrvars.hcl caveat as k8s_version applies."
+  description = "Argo CD Helm chart version, genesis-installed into /opt/kube-compute/manifests/00-argocd.yaml. Resolved automatically by build.sh — same do-not-set caveat as k8s_version."
 }
 
 variable "rendered_manifests_dir" {
   type        = string
-  description = "Local directory (on the Packer build host) containing the pre-rendered cilium.yaml/00-argocd.yaml to copy onto the AMI. Always set by build.sh (a fresh mktemp -d per build, rendered via helm template immediately before invoking packer build) — not meant to be set by hand; there is no default so a bare 'packer build' (bypassing build.sh) fails loudly instead of silently baking a stale or missing manifest."
+  description = "Directory containing the pre-rendered cilium.yaml/00-argocd.yaml to copy onto the AMI. Always set by build.sh — no default, so a bare 'packer build' fails loudly instead of baking a stale manifest."
 }

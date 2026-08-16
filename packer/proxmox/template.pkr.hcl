@@ -13,16 +13,13 @@ packer {
 }
 
 locals {
-  build_date = formatdate("YYYY-MM-DD", timestamp())
-  # Same slug packer/aws/template.pkr.hcl uses — bump both alongside the seed
-  # template if this project ever moves off AlmaLinux 10.
-  distro_slug      = "almalinux10"
-  k8s_version_safe = replace(var.k8s_version, "+", "-")
-  image_name       = "${local.distro_slug}-kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}"
+  build_date  = formatdate("YYYY-MM-DD", timestamp())
+  distro_slug = "almalinux10" # bump alongside the seed template if this project ever moves off it
   # Proxmox tags allow only [A-Za-z0-9_-] — stricter than VM/template names
-  # (which allow dots, confirmed working in image_name above). k8s_version_safe
-  # still has dots (e.g. "v1.36.1-rke2r1"), so tags need their own value.
-  k8s_version_tag = replace(local.k8s_version_safe, ".", "-")
+  # (which allow dots).
+  k8s_version_safe = replace(var.k8s_version, "+", "-")
+  k8s_version_tag  = replace(local.k8s_version_safe, ".", "-")
+  image_name       = "${local.distro_slug}-kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}"
 }
 
 source "proxmox-clone" "rke2" {
@@ -38,47 +35,32 @@ source "proxmox-clone" "rke2" {
   template_name        = local.image_name
   template_description = "RKE2 ${var.k8s_version} / Cilium ${var.cilium_version} / Argo CD ${var.argocd_version}, baked ${local.build_date}"
   # Semicolon-separated (packer-plugin-proxmox's Tags is a single string,
-  # unlike bpg/proxmox's list-typed tags on the seed) — mirrors the seed's
-  # "kube-image" tag, plus "template" (seed's own tag is "seed-template", so
-  # the two are never confused), sanitized k8s_version, the distro slug, and
-  # the seed VM ID this was cloned from — AWS's equivalent traceability is
-  # source-ami-id; Proxmox has no queryable "resolved source", so the seed
-  # VM ID it actually cloned from is the closest fact worth recording.
+  # unlike bpg/proxmox's list-typed tags on the seed). seed-vm-<id> traces
+  # this build back to the seed it cloned from — Proxmox has no queryable
+  # "resolved source" the way AWS's source-ami-id tag does.
   tags = "kube-image;template;${local.k8s_version_tag};${local.distro_slug};seed-vm-${var.seed_template_vm_id}"
 
   cores  = 2
   memory = 2048
   os     = "l26"
 
-  # Proxmox's own CPU-type default ("kvm64") emulates a baseline pre-SSE4.2 CPU;
-  # AlmaLinux 10/RHEL10 userspace assumes more than that's actually there, and
-  # booting under kvm64 produced a very early kernel panic ("Attempted to kill
-  # init!", a SIGSEGV inside systemd's own startup, present on the seed's own
-  # first boot too — not something the scsi_controller/disk settings below caused
-  # or fixed) on a real bake. kube-compute's proxmox-control-plane defaults to the
-  # named QEMU model "x86-64-v2-AES" instead (for live-migration portability across
-  # a running cluster's hosts) — tried that here first, but it produced the
-  # identical panic on real hardware (a Dell PowerEdge T630/older Xeon): the named
-  # model can claim CPUID features KVM can't actually back on that silicon,
-  # producing the same illegal-instruction-flavored crash kvm64 did. var.cpu_type
-  # defaults to "host" instead — always exactly what the physical CPU supports,
-  # no claimed-but-unbacked features possible. Live-migration portability doesn't
-  # apply here: this is a bake-only VM, never migrated. Override if your build
-  # host's exact CPU model matters to you for some other reason.
+  # Proxmox's "kvm64" default emulates a pre-SSE4.2 CPU that AlmaLinux
+  # 10/RHEL10 userspace assumes more than — booting under it panics very
+  # early ("Attempted to kill init!"). The named model "x86-64-v2-AES"
+  # (kube-compute's proxmox-control-plane default, for live-migration
+  # portability) hit the identical panic on real hardware (Dell PowerEdge
+  # T630/older Xeon): it can claim CPUID features KVM can't actually back on
+  # that silicon. "host" always matches exactly what the physical CPU
+  # supports. Live-migration portability doesn't apply here — bake-only VM,
+  # never migrated.
   cpu_type = var.cpu_type
 
-  # Must match the seed template's own scsi_hardware (packer/proxmox/seed/main.tf,
-  # "virtio-scsi-single") — full_clone copies the disk image but Packer's own VM
-  # config otherwise defaults the controller to "lsi" (packer-plugin-proxmox's
-  # builder/proxmox/common/config.go). The plugin's own validation rejects
-  # io_thread=true under any controller but virtio-scsi-single, so without this the
-  # seed's inherited iothread disk setting gets silently dropped by Proxmox at
-  # clone time — a real, separate correctness issue, kept even though it turned
-  # out not to be what caused the panic above.
+  # Must match the seed template's own scsi_hardware (packer/proxmox/seed/main.tf)
+  # — full_clone copies the disk but Packer's own VM config otherwise
+  # defaults the controller to "lsi", and io_thread=true is only valid under
+  # virtio-scsi-single.
   scsi_controller = "virtio-scsi-single"
 
-  # Matches kube-compute's proven proxmox_virtual_environment_vm disk block
-  # (proxmox-control-plane/main.tf) now that scsi_controller makes io_thread valid.
   disks {
     disk_size    = "20G"
     storage_pool = var.disk_datastore_id
@@ -105,16 +87,13 @@ build {
   provisioner "ansible" {
     playbook_file = "../../ansible/playbook-proxmox.yml"
     user          = var.ssh_username
-    # Default (true) routes ansible-playbook's SSH through Packer's own proxy
-    # adapter, which tunnels over Packer's already-established communicator
-    # session to the VM. rke2_bake_common's mid-play reboot (os-prep | reboot
-    # after the OS update) kills that underlying session; ansible.builtin.reboot's
-    # own reconnect/retry logic can't recover it, since it's retrying against a
-    # dead proxy, not a real socket -- the build hangs on "connection refused"
-    # indefinitely. use_proxy=false makes ansible-playbook dial the VM's real IP
-    # directly instead, so a plain TCP retry actually succeeds once the VM is
-    # back up. Requires the Packer build host to reach the VM's IP directly
-    # (true here -- same LAN as the Proxmox host).
+    # Default (true) tunnels ansible-playbook's SSH through Packer's own
+    # proxy adapter. rke2_bake_common's mid-play reboot kills that
+    # underlying session, and ansible.builtin.reboot's reconnect logic can't
+    # recover a dead proxy, only a real socket — the build hangs
+    # indefinitely. use_proxy=false dials the VM's real IP directly instead,
+    # so a plain TCP retry succeeds once it's back up. Requires the build
+    # host to reach the VM's IP directly (true here — same LAN as Proxmox).
     use_proxy = false
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",

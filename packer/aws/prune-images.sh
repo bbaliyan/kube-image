@@ -1,27 +1,17 @@
 #!/usr/bin/env bash
-# Deregisters old kube-image-built AMIs (and deletes their backing
-# snapshots), keeping the N most recent. AWS counterpart of
-# packer/proxmox/prune-images.sh — same "no packer-native retention, so
-# talk to the provider's API directly" reasoning, using the AWS CLI instead
-# of curl-against-the-Proxmox-API since kube-image already assumes an AWS
-# credential chain is available for the build itself. Selects AMIs by the
-# kube-image=true tag template.pkr.hcl sets; sorts by CreationDate (returned
-# directly by the API, unlike Proxmox's name-embedded date) so it's correct
-# regardless of any AMI-name edge case.
+# Deregisters old kube-image AMIs (and their backing snapshots), keeping the
+# N most recent. Packer has no build history or retention of its own.
+# Selects AMIs by the kube-image=true tag template.pkr.hcl sets; sorts by
+# CreationDate.
 #
-# --architecture is required and filters to one architecture at a time
-# (x86_64 or arm64) — template.pkr.hcl can build both from the same repo,
-# and "keep N most recent" has to apply separately per architecture, or
-# pruning one arch's builds could delete the only AMI of the other arch
-# just because it looked "older" in a combined list. AMIs built before this
-# flag existed have no architecture tag and won't match either value —
-# prune those manually once (aws ec2 deregister-image/delete-snapshot).
+# --architecture is required and prunes one architecture at a time, so
+# pruning x86_64 builds can never delete the only arm64 AMI (or vice versa).
+# AMIs built before this flag existed have no architecture tag and won't
+# match either value — prune those manually once.
 #
 # Usage: ./prune-images.sh --region <aws-region> --architecture <x86_64|arm64> [--keep N] [--dry-run] [--yes]
-#   --region        AWS region the AMIs live in (required; matches aws_region
-#                   in aws.auto.pkrvars.hcl)
-#   --architecture  Only prune AMIs tagged with this architecture (required;
-#                   matches ami_architecture in aws.auto.pkrvars.hcl)
+#   --region        AWS region the AMIs live in (required)
+#   --architecture  Only prune AMIs tagged with this architecture (required)
 #   --keep          How many most-recent AMIs to keep (default: 3)
 #   --dry-run       List what would be destroyed, change nothing
 #   --yes           Skip the confirmation prompt
@@ -73,9 +63,7 @@ if [ -z "$ARCHITECTURE" ]; then
   exit 1
 fi
 
-# --owners self: only ever touch AMIs this account itself registered — never
-# the AlmaLinux Foundation's own published AMIs (owner 764336703387) this
-# build sources from.
+# --owners self: never touch the AlmaLinux Foundation's own published AMIs.
 mapfile -t AMIS < <(
   aws ec2 describe-images \
     --region "$REGION" \
@@ -128,8 +116,8 @@ for entry in "${DELETE_LIST[@]}"; do
   image_id="$(printf '%s' "$entry" | cut -f1)"
   name="$(printf '%s' "$entry" | cut -f2)"
 
-  # Snapshot IDs must be captured before deregistering — describe-images no
-  # longer returns them for an AMI once it's deregistered.
+  # Must capture snapshot IDs before deregistering — describe-images no
+  # longer returns them for a deregistered AMI.
   mapfile -t snapshot_ids < <(
     aws ec2 describe-images \
       --region "$REGION" \

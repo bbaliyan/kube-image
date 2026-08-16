@@ -1,32 +1,22 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 k8s_version: ""
-# Always passed via --extra-vars by the invoking Packer template
-# (packer/aws/template.pkr.hcl or packer/proxmox/template.pkr.hcl), pointing
-# at build.sh's mktemp -d render output. No real default — the empty string
-# fails loudly (copy module errors on a nonexistent src) rather than
-# silently baking nothing.
+# Always passed via --extra-vars by the invoking Packer template, pointing
+# at build.sh's rendered manifests. No real default — an empty string fails
+# loudly (copy module errors on a nonexistent src) rather than silently
+# baking nothing.
 rendered_manifests_dir: ""
-
-# Also always passed via --extra-vars by template.pkr.hcl (build.sh renders
-# capi-install.yaml — the CAPI/CAPMOX install manifest, unconditionally, as
-# part of the one rke2-proxmox build — there is no second build target;
-# CAPRKE2 and the separate autoscaler-worker image variant that used to
-# exist were both dropped, see git history for why).
 rendered_capi_manifests_dir: ""
 
-# All three default true — this role's original behavior. Kept as toggles
-# (rather than deleted now that there's only one build target using them)
-# in case a future lighter/alternate image variant needs to skip one of
-# these steps again; currently every real build sets none of them false.
+# All three default true. Kept as toggles in case a future lighter/alternate
+# image variant needs to skip one of these steps; no real build sets any of
+# them false today.
 bake_install_rke2: true
 bake_copy_gitops_manifests: true
 bake_stage_capi_manifests: true
 
-# ansible.builtin.reboot's own defaults. Both providers' ansible provisioner
-# blocks set use_proxy = false (see each provider's template.pkr.hcl) and
-# both Packer builders connect over plain SSH directly to the build
-# instance's real IP, so a plain TCP retry after the mid-play reboot is
-# cheap either way — neither playbook needs to override these.
+# ansible.builtin.reboot's own defaults — both providers connect over plain
+# SSH directly to the build instance's IP, so a plain TCP retry after the
+# mid-play reboot is cheap either way.
 bake_reboot_connect_timeout: 5
 bake_reboot_post_delay: 0

@@ -1,32 +1,23 @@
 # SPDX-License-Identifier: Apache-2.0
 # Genesis Cilium values — rendered into the baked template's
-# /opt/kube-compute/manifests/cilium.yaml via `helm template` at kube-image
-# build time (packer/proxmox/build.sh). Moved here from kube-compute's
-# node-bootstrap, which used to render this same content live on every
-# `tofu apply` (the live-rendered manifest, embedded whole in cloud-init,
-# blew Proxmox's 1 MiB cicustom snippet cap on a real apply). Kept in sync
-# with kube-platform's bootstrap/templates/cilium-app.yaml, which is
+# /opt/kube-compute/manifests/cilium.yaml via `helm template` at build time.
+# Moved here from kube-compute's node-bootstrap, which used to render this
+# live on every `tofu apply` (blew Proxmox's 1 MiB cicustom snippet cap).
+# Kept in sync with kube-platform's bootstrap/templates/cilium-app.yaml,
 # authoritative once Argo CD adopts this genesis install.
 kubeProxyReplacement: true
 k8sServiceHost: "127.0.0.1"
 k8sServicePort: 6443
-# Node IPAM LB is the platform's LoadBalancer mechanism on every provider: it
-# advertises the node's own (LAN- or VPC-routable) IP into a LoadBalancer
-# Service, with the eBPF datapath forwarding to pods — no ARP, BGP, cloud
-# API, or extra component. defaultLBServiceIPAM makes every LoadBalancer
-# Service use it without a per-Service loadBalancerClass.
+# Node IPAM LB: advertises the node's own IP into a LoadBalancer Service,
+# eBPF forwarding to pods — no ARP/BGP/cloud API/extra component needed.
 nodeIPAM:
   enabled: true
 defaultLBServiceIPAM: nodeipam
 operator:
-  # Matches kube-platform's cilium-app.yaml default: a single-node cluster
-  # is this project's current primary target, and cilium-operator's chart
-  # default (2 replicas, pod anti-affinity) leaves a second replica
-  # permanently Pending on a single node. A multi-node consumer needing 2
-  # back gets it the moment Argo CD adopts this install — no image rebuild
-  # needed. kube-compute's old cilium_operator_replicas override (a live
-  # per-cluster Helm value) doesn't carry forward here: this value is now
-  # baked once, shared across every cluster cloned from the template.
+  # A single-node cluster is this project's current primary target;
+  # cilium-operator's chart default (2 replicas, anti-affinity) leaves a
+  # second replica permanently Pending on one node. A multi-node consumer
+  # gets 2 back the moment Argo CD adopts this install.
   replicas: 1
   tolerations:
     - operator: Exists

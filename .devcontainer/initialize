@@ -1,10 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: Apache-2.0
 # Unix counterpart of initialize.cmd — see devcontainer.json's
-# initializeCommand comment for why both exist and how the OS picks between
-# them. Runs on the HOST (macOS/Linux/WSL2), before the container starts, to
-# ensure the mount sources below exist — Docker Desktop for Mac/Windows
-# usually auto-creates a missing bind-mount source, but plain Linux Docker
-# Engine does not and fails the mount outright instead.
+# initializeCommand comment. Runs on the host before the container starts,
+# to ensure the mount sources below exist (plain Linux Docker Engine fails
+# the mount outright if they don't; Docker Desktop usually auto-creates them).
 set -eu
 mkdir -p ~/.ssh ~/.kube-compute ~/.aws

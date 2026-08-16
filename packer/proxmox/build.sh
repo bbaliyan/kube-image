@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
-# Wrapper for 'packer build' that re-derives PKR_VAR_proxmox_url /
-# proxmox_api_token_id / proxmox_api_token_secret from the current
-# PROXMOX_VE_ENDPOINT/PROXMOX_VE_API_TOKEN immediately before building.
+# Wrapper for 'packer build': re-derives Proxmox credentials, resolves
+# k8s/Cilium/Argo CD/CAPI versions, and renders the genesis + CAPI/CAPMOX
+# manifests before every build.
 #
-# Why this exists instead of relying on the devcontainer's already-exported
-# PKR_VAR_* (see .devcontainer/write-env.sh): that derivation only re-runs
-# when a shell starts. kube-proxmox-login's own printed instruction after a
-# token refresh is 'source ~/.kube-compute/proxmox' — that updates
-# PROXMOX_VE_API_TOKEN in the current shell, but NOT this shell's
-# already-exported PKR_VAR_* values (they stay stale from whenever the shell
-# started), so a same-terminal token refresh followed by 'packer build'
-# directly fails with a 401 even though PROXMOX_VE_API_TOKEN itself is
-# current. Re-deriving fresh, right here, right before the real build, makes
-# this correct regardless of what got sourced (or wasn't) beforehand.
+# Credentials are re-derived here (rather than relying on the devcontainer's
+# own PKR_VAR_* export, which only runs at shell start) because
+# kube-proxmox-login's refresh instruction updates PROXMOX_VE_API_TOKEN in
+# the current shell but not an already-exported PKR_VAR_proxmox_*, so a
+# same-terminal refresh followed by a bare 'packer build' would otherwise
+# fail with a 401 even though PROXMOX_VE_API_TOKEN itself is current.
 set -euo pipefail
 
 test -f /root/.kube-compute/proxmox && source /root/.kube-compute/proxmox
@@ -26,50 +22,24 @@ if [ -n "${PROXMOX_VE_API_TOKEN:-}" ]; then
   export PKR_VAR_proxmox_api_token_secret="${PROXMOX_VE_API_TOKEN#*=}"
 fi
 
-# CAPMOX (clusterctl generate provider --infrastructure, in
-# render_capi_manifests below) templates a manager-wide credentials Secret
-# (capmox-manager-credentials, capmox-system namespace) from
-# PROXMOX_URL/PROXMOX_TOKEN/PROXMOX_SECRET env vars — CAPMOX's own naming,
-# distinct from both PROXMOX_VE_* (bpg/proxmox's Terraform provider) and
-# PKR_VAR_* (this script's own Packer vars).
-#
-# Deliberately NOT re-derived from the real PROXMOX_VE_* credentials (a prior
-# revision of this script did that): whatever lands in these three vars gets
-# baked, in plaintext, into capi-install.yaml, which is copied onto every VM
-# image this script builds (ansible/roles/rke2_bake_common's `copy` task) and
-# applied to every cluster's genesis node. A real Proxmox API token baked into
-# a disk image is a standing credential leak — present on disk, in every VM
-# cloned from the template, indefinitely, regardless of whether CAPMOX ever
-# actually uses it. It doesn't need to be real: every ProxmoxCluster this
-# project renders (kube-compute's cluster-autoscaler-workers.yaml.tftpl) sets
-# its own spec.credentialsRef, which CAPMOX's controller uses in place of the
-# manager-wide Secret for that object's reconciliation — so the manager-wide
-# Secret is never actually consulted for a correctly-configured cluster. Fixed
-# placeholder values here (never the real endpoint/token) mean a stale/failed
-# credentialsRef fails loudly (CAPMOX rejects the placeholder host, or a real
-# 401 against Proxmox) instead of silently succeeding via a leaked fallback.
+# CAPMOX's `clusterctl generate provider --infrastructure` templates a
+# manager-wide credentials Secret from PROXMOX_URL/PROXMOX_TOKEN/
+# PROXMOX_SECRET (CAPMOX's own naming). Deliberately fixed, non-functional
+# placeholders here, never the real PROXMOX_VE_* credentials — whatever
+# lands in this Secret is baked in plaintext into every image. See
+# README.md's "CAPI/CAPMOX install manifest" for why a placeholder is safe:
+# every ProxmoxCluster this project renders sets its own credentialsRef,
+# which CAPMOX prefers over the manager-wide Secret.
 export PROXMOX_URL="https://credentials-ref-required.invalid:8006"
 export PROXMOX_TOKEN="unset@pve!unset"
 export PROXMOX_SECRET="unset"
 
 # ---- k8s/Cilium/Argo CD/CAPI version resolution -----------------------------
-# Same pin kube-compute's component-versions module carries
-# (pinned_platform_repo_url/_revision) — each repo keeps its own copy rather
-# than sharing config across repos, matching how kube-compute's own
-# provider modules already duplicate rather than share.
 : "${KUBE_PLATFORM_REPO_URL:=https://github.com/bbaliyan/kube-platform.git}"
 : "${KUBE_PLATFORM_REVISION:=main}"
 
 # PKR_VAR_* env vars lose to a *.auto.pkrvars.hcl entry of the same name, so
-# k8s_version/cilium_version/argocd_version must NOT be set in
-# proxmox.auto.pkrvars.hcl (or its .example) for this fetch to actually take
-# effect — see README.md. Already-exported PKR_VAR_* (e.g. a manual override
-# at the shell) still wins over this fetch, since each export below is
-# conditional on the variable being unset.
-#
-# CAPI/CAPMOX pins are resolved for every build: capi-install.yaml is applied
-# by bootstrap.sh from the control-plane/genesis node, which is this image —
-# there is no other image variant anymore.
+# these six must NOT be set in proxmox.auto.pkrvars.hcl — see README.md.
 capi_versions_needed=false
 if [ -z "${PKR_VAR_capi_core_version:-}" ] || [ -z "${PKR_VAR_capmox_version:-}" ]; then
   capi_versions_needed=true
@@ -84,59 +54,34 @@ if [ -z "${PKR_VAR_k8s_version:-}" ] || [ -z "${PKR_VAR_cilium_version:-}" ] || 
   : "${PKR_VAR_argocd_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["argocdVersion"])')}"
   export PKR_VAR_k8s_version PKR_VAR_cilium_version PKR_VAR_argocd_version
 
-  # CAPI/CAPMOX pins only exist in platform-versions.yaml once kube-platform's
-  # own version-pin task lands them (capiCoreVersion/capmoxVersion) —
-  # fetched/required for every build now (see the comment above this block).
   : "${PKR_VAR_capi_core_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["capiCoreVersion"])')}"
   : "${PKR_VAR_capmox_version:=$(printf '%s' "${platform_versions}" | python3 -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["capmoxVersion"])')}"
   export PKR_VAR_capi_core_version PKR_VAR_capmox_version
 fi
 
 # ---- CAPI/CAPMOX install manifest render -----------------------------------
-# Two separate 'clusterctl generate provider' invocations — a single
-# combined call across --core/--infrastructure is unconfirmed to exist (no
-# clusterctl doc example combines them). If a combined call is later
-# confirmed to work against the real clusterctl binary, collapse these two
-# calls into one and delete this comment.
 render_capi_manifests() {
   local out_dir="$1" # e.g. "$render_dir/capi"
   mkdir -p "$out_dir"
 
-  # clusterctl generate provider --infrastructure requires these three env
-  # vars to be non-empty to template the manager credentials Secret at all —
-  # not a signal that they need to be real (see the placeholder values set
-  # above this function). Fail loudly only if unset entirely (e.g. this
-  # function called directly without sourcing the rest of this script).
   : "${PROXMOX_URL:?render_capi_manifests requires PROXMOX_URL (placeholder is fine — see comment above)}"
   : "${PROXMOX_TOKEN:?render_capi_manifests requires PROXMOX_TOKEN (placeholder is fine — see comment above)}"
   : "${PROXMOX_SECRET:?render_capi_manifests requires PROXMOX_SECRET (placeholder is fine — see comment above)}"
 
   clusterctl generate provider --core "cluster-api:${PKR_VAR_capi_core_version}" \
     --write-to "${out_dir}/00-capi-core.yaml"
-  # clusterctl's built-in provider name for ionos-cloud/cluster-api-provider-proxmox
-  # is "proxmox" -- NOT "ionos-cloud-proxmox" (that name doesn't exist; easy to
-  # confuse with the unrelated "ionoscloud-ionoscloud" provider, IONOS's actual
-  # cloud, which happens to live in the same GitHub org). Confirmed against
-  # clusterctl's embedded provider list (cmd/clusterctl/client/config/providers_client.go).
+  # clusterctl's provider name for ionos-cloud/cluster-api-provider-proxmox
+  # is "proxmox" — not "ionos-cloud-proxmox" (that name doesn't exist; easy
+  # to confuse with the unrelated ionoscloud-ionoscloud provider).
   clusterctl generate provider --infrastructure "proxmox:${PKR_VAR_capmox_version}" \
     --write-to "${out_dir}/01-capmox.yaml"
 
-  # A plain `cat` here previously produced a broken capi-install.yaml:
   # clusterctl's --write-to output for each provider doesn't end with a
-  # trailing `---`, so the last document of 00-capi-core.yaml (a
-  # ValidatingWebhookConfiguration) ran straight into the first document of
-  # 01-capmox.yaml (a Namespace) with no document boundary between them.
-  # YAML has no concept of two mappings appearing back-to-back at the top
-  # level outside a stream separator, so the parser folded them into one
-  # mapping — apiVersion/kind/metadata from the Namespace document
-  # overwrote the webhook config's (duplicate keys, last wins), while
-  # `webhooks:` from the first document survived as a stray key. The
-  # apiserver then rejected it: "Namespace ... strict decoding error:
-  # unknown field \"webhooks\"" (found live on a real apply — see
-  # kube-claude's cluster-autoscaler-proxmox-capi plan). Emitting an
-  # explicit `---` before each file's contents guarantees a document
-  # boundary at every seam regardless of whether the source file ends
-  # with one of its own.
+  # trailing `---`, so a plain `cat` here previously ran the last document
+  # of one file straight into the first of the next with no document
+  # boundary — YAML folded them into one mapping (duplicate keys, last
+  # wins), and the apiserver rejected the result. Emitting an explicit `---`
+  # before each file guarantees a boundary regardless of the source.
   local combined
   combined="$(mktemp)"
   for f in "${out_dir}"/*.yaml; do
@@ -146,16 +91,9 @@ render_capi_manifests() {
   mv "${combined}" "${out_dir}/capi-install.yaml"
 }
 
-# ---- Genesis manifest render (Packer build host, not the VM being baked) --
-# `helm template` here runs on this machine (already has helm and network
-# access to the chart repos for the version-resolution fetch above); the VM
-# gets only the finished YAML copied in via the ansible provisioner's `copy`
-# task (ansible/roles/rke2_bake_common/tasks/main.yml), never helm itself or
-# network egress to a chart repo. See README.md for why this moved out of
-# kube-compute's node-bootstrap: the live-rendered manifest, embedded whole
-# in cloud-init, exceeded Proxmox's 1 MiB cicustom snippet cap on a real
-# apply (Argo CD's chart alone renders to ~1.9 MB, CRDs included either way
-# --include-crds is set).
+# ---- Genesis manifest render (build host, not the VM being baked) ---------
+# Keeps Argo CD's ~1.9 MB of CRDs out of node-bootstrap's cloud-init payload
+# (Proxmox's cicustom snippet cap is 1 MiB).
 render_dir="$(mktemp -d)"
 trap 'rm -rf "${render_dir}"' EXIT
 
@@ -188,20 +126,12 @@ export PKR_VAR_rendered_manifests_dir="${render_dir}"
 render_capi_manifests "${render_dir}/capi"
 export PKR_VAR_rendered_capi_manifests_dir="${render_dir}/capi"
 
-# packer init is idempotent (no-op if template.pkr.hcl's required_plugins are
-# already installed), so running it unconditionally on every build removes a
-# manual first-time step (README's "packer init .") without adding real cost.
-packer init "$@"
+packer init "$@" # idempotent, so running it unconditionally removes a manual first-time step
 
-# -timestamp-ui timestamps every output line, so a slow step is visible
-# while it's happening. Off by default (CI doesn't need it) — opt in with
-# PACKER_BUILD_TIMESTAMPS=1 ./build.sh .
 build_args=("$@")
 if [ "${PACKER_BUILD_TIMESTAMPS:-0}" = "1" ]; then
   build_args=("-timestamp-ui" "${build_args[@]}")
 fi
 
-# Not `exec` here (unlike this script would otherwise prefer): the render_dir
-# cleanup trap above only runs on this shell's own exit, which `exec`
-# replacing the process image would skip entirely.
+# Not `exec`: the render_dir cleanup trap only runs on this shell's own exit.
 packer build "${build_args[@]}"

@@ -1,38 +1,28 @@
-# k8s_version / cilium_version / argocd_version are deliberately NOT set here
-# (or in any .auto.pkrvars.hcl) — build.sh resolves them automatically from
-# kube-platform's platform/platform-versions/values.yaml before every build,
-# so the baked image can never silently drift from what Argo CD will
-# actually run once it adopts the genesis install. A var-file entry of the
-# same name outranks build.sh's PKR_VAR_* export and would silently defeat
-# this — if you need a specific pin, export PKR_VAR_k8s_version (etc.) at the
-# shell instead, which build.sh's fetch only fills in when unset.
+# k8s_version/cilium_version/argocd_version are deliberately NOT set here —
+# build.sh resolves them automatically before every build. A var-file entry
+# of the same name would silently outrank that resolution; see README.md.
 
 aws_region = "us-east-1"
 
-# Required, no default — the CIDR range(s) the build host's traffic actually
-# arrives from, scoping the temporary security group's inbound SSH rule.
-# Never 0.0.0.0/0. See README's "Prerequisites".
+# Required, no default — never 0.0.0.0/0. See README's "Prerequisites".
 security_group_source_cidrs = ["203.0.113.0/24"]
 
 # subnet_id/vpc_id left unset here — defaults to the account's default VPC.
-# If your account has no default VPC, set both (not just subnet_id, or
-# RunInstances fails with "No default VPC for this user"):
+# If your account has no default VPC, set both:
 # subnet_id = "subnet-0123456789abcdef0"
-# vpc_id    = "vpc-0123456789abcdef0"   # find with: aws ec2 describe-subnets --subnet-ids <subnet_id> --query 'Subnets[0].VpcId' --output text
+# vpc_id    = "vpc-0123456789abcdef0"
 
-# instance_type/ami_architecture are deliberately left unset here too (both
-# default to an x86_64 build — "t3.medium"/"x86_64" — via variables.pkr.hcl),
-# for the same reason as k8s_version above: a var-file entry here would
-# outrank a PKR_VAR_instance_type/PKR_VAR_ami_architecture override at build
-# time, silently defeating an arm64 build (see README's "Building"). Pin
-# either only if this file should always build one fixed instance_type/
-# architecture and never the other via an env-var override:
+# instance_type/ami_architecture left unset too, so a PKR_VAR_* override at
+# build time (e.g. an arm64 build) isn't silently defeated — see README's
+# "Building":
 # instance_type    = "t3.medium"
 # ami_architecture = "x86_64"
 
-# extra_tags defaults to {} — cost-allocation/owner tags merged onto every
-# resource the build creates (see README's "Accounting tags"):
+# extra_tags defaults to {} — see README's "Accounting tags":
 # extra_tags = {
 #   CostCenter = "platform"
 #   Owner      = "your-name"
 # }
+
+# region_replicas defaults to [] — see README's "Multi-region replication":
+# region_replicas = ["us-west-2", "eu-west-1"]

@@ -3,10 +3,7 @@
 # Provider-agnostic bake tasks — same AlmaLinux 10 base image, same OS-prep/
 # RKE2-install/template-cleanup steps regardless of which provider's Packer
 # template invokes this role. Provider-specific tasks (e.g. AWS's
-# amazon-ssm-agent install, see rke2_bake_aws) live in a separate
-# rke2_bake_<provider> role instead, included alongside this one by that
-# provider's own playbook. Proxmox currently has no provider-specific tasks
-# at all, so ansible/playbook-proxmox.yml includes only this role.
+# amazon-ssm-agent install) live in a separate rke2_bake_<provider> role.
 
 - name: os-prep | inotify limits
   ansible.builtin.copy:
@@ -31,13 +28,6 @@
     - dnf-makecache.service
   failed_when: false
 
-# Full OS currency at bake time — replaces node-bootstrap's first-boot os_patch
-# call, which is now redundant on a fresh image (see the design spec's node-os-patch
-# section). Independent copy of the dnf-update-loop logic, not shared with
-# node-os-patch's role — two separate public repos, matching existing precedent
-# (rke2-selinux's own retry logic carries the same "extract when a third copy
-# shows up" note). The reboot itself is handled below, mid-role, before the
-# kernel-module install task so that install targets the post-update kernel.
 - name: os-prep | run dnf update -y (retry + self-heal on lock contention)
   ansible.builtin.shell:
     cmd: |
@@ -52,41 +42,30 @@
   changed_when: true
 
 # Unconditional, not gated on a needs-restarting check: a full dnf update
-# against a base cloud image (which can be weeks/months stale) needs a reboot
-# in practice on virtually every bake anyway (kernel/glibc bumps are near-
-# universal), so installing dnf-utils and running the check just to confirm
-# something already near-certain cost more build time on average than it
-# saved — measured on a real bake, both the extra package install and the
-# check itself were pure overhead every single time.
+# against a stale base image needs a reboot on virtually every bake anyway
+# (kernel/glibc bumps are near-universal), so the check cost more build time
+# on average than it saved.
 - name: os-prep | reboot after the OS update
   ansible.builtin.reboot:
     reboot_timeout: 600
     connect_timeout: "{{ bake_reboot_connect_timeout }}"
     post_reboot_delay: "{{ bake_reboot_post_delay }}"
 
-# dnf update above already left a fresh cache, and no repo has changed since
-# — a second dnf makecache here was pure duplicate metadata sync (confirmed
-# wasted time on a real bake). The rke2-selinux install below DOES need one:
-# the rancher-rke2-common repo is added between here and there.
 - name: os-prep | install ca-certificates and curl, load br_netfilter/overlay
   ansible.builtin.shell:
     cmd: |
       set -euo pipefail
-      # ca-certificates/curl and kernel-modules-extra-matched are independent
-      # package sets — one dnf transaction instead of two avoids resolving
-      # dependencies twice.
       dnf install -y ca-certificates curl kernel-modules-extra-matched
-      # AlmaLinux 10's minimal image ships only kernel-modules-core, which excludes
-      # nft_compat (the iptables-nft translation shim). Cilium's default VXLAN mode
-      # installs its tunnel-accept rule via classic iptables syntax, which needs
-      # nft_compat — without it Cilium's iptables reconciliation fails and freshly
-      # created pods become unreachable. Use the unversioned "-matched" meta-package,
-      # not a pinned NVR: the BaseOS repo only keeps the subpackage for the latest
-      # kernel, so a pinned request can match nothing for the image's running kernel.
+      # AlmaLinux 10's minimal image ships only kernel-modules-core, which
+      # excludes nft_compat (the iptables-nft translation shim). Cilium's
+      # default VXLAN mode needs it — without it, Cilium's iptables
+      # reconciliation fails and freshly created pods become unreachable.
+      # "-matched" (not a pinned NVR): BaseOS only keeps this subpackage for
+      # the latest kernel, so a pinned request can match nothing.
       modprobe nft_compat
-      # RHEL10 kernels (6.12+) dropped br_netfilter — bridged traffic is filtered
-      # natively via nftables bridge hooks, so there's no module to load and no
-      # bridge-nf-call-* knob. RHEL9 kernels still ship it and need both.
+      # RHEL10 kernels (6.12+) dropped br_netfilter — bridged traffic is
+      # filtered natively via nftables bridge hooks. RHEL9 kernels still
+      # ship it and need both.
       if modinfo br_netfilter >/dev/null 2>&1; then
         printf 'br_netfilter\noverlay\n' >/etc/modules-load.d/rke2.conf
         modprobe br_netfilter
@@ -144,19 +123,16 @@
       done
   changed_when: true
 
-# RPM version string for k8s_version (e.g. "v1.36.2+rke2r1" -> "1.36.2~rke2r1"),
-# matching the NEVRA actually published on rpm.rancher.io (confirmed via
-# repoquery: rke2-common-0:1.36.2~rke2r1-0.el10). Used below to pin every
-# rke2-* package explicitly — see the rke2-common task's comment for why an
-# exact pin is required rather than trusting dnf's dependency resolution.
+# e.g. "v1.36.2+rke2r1" -> "1.36.2~rke2r1", the NEVRA rpm.rancher.io actually
+# publishes (confirmed via repoquery). Used below to pin every rke2-*
+# package explicitly.
 - name: rke2 | compute the RPM-style version string for k8s_version
   ansible.builtin.set_fact:
     rke2_rpm_version: "{{ k8s_version | regex_replace('^v', '') | regex_replace('\\+', '~') }}"
 
-# get.rke2.io's rpm-method install only installs the rke2-${INSTALL_RKE2_TYPE}
-# package (INSTALL_RKE2_TYPE defaults to "server"), which ships ONLY
-# rke2-server.service. It does add the Rancher RKE2 repos as a side effect,
-# which the next task relies on to also pull in rke2-agent.
+# get.rke2.io's rpm-method install only installs rke2-server (INSTALL_RKE2_TYPE
+# defaults to "server"). It does add the Rancher RKE2 repos as a side
+# effect, which the next task relies on for rke2-agent.
 - name: rke2 | install RKE2 server (also adds the Rancher RKE2 repos)
   ansible.builtin.shell:
     cmd: |
@@ -167,16 +143,11 @@
     INSTALL_RKE2_VERSION: "{{ k8s_version }}"
   when: bake_install_rke2
 
-# get.rke2.io pins rke2-server to an exact k8s_version via INSTALL_RKE2_VERSION,
-# but rke2-server's dependency on rke2-common is an unversioned constraint —
-# the "1.36-stable" repo keeps every recent patch build available
-# simultaneously, so dnf's solver is free to resolve rke2-common to whatever
-# is newest in the repo rather than matching rke2-server's pinned patch.
-# Confirmed on a real bake: rke2-server correctly pinned to 1.36.2, but
-# rke2-common (which actually ships /usr/bin/rke2) landed on 1.36.3 — `rke2
-# -v` reported the wrong version even though `rpm -q rke2-server` looked
-# right. Force the exact match explicitly rather than trust the dependency
-# resolver.
+# rke2-server's dependency on rke2-common is unversioned, and the
+# "1.36-stable" repo keeps every recent patch build available at once, so
+# dnf's solver can land rke2-common on a different patch than rke2-server's
+# pin. Confirmed on a real bake: rke2-server pinned correctly to 1.36.2 but
+# rke2-common landed on 1.36.3, and `rke2 -v` reported the wrong version.
 - name: rke2 | pin rke2-common to the exact k8s_version (dnf otherwise resolves it independently of rke2-server)
   ansible.builtin.shell:
     cmd: |
@@ -185,19 +156,11 @@
   when: bake_install_rke2
   changed_when: true
 
-# Confirmed against a real bake: without this task, the image ends up with
-# only rke2-server.service, so a worker-role clone's cloud-init
-# `systemctl enable --now rke2-agent.service` fails outright ("Unit
-# rke2-agent.service does not exist") and the node never joins. Role
-# selection (which unit to enable+start) is a launch-time decision —
-# kube-compute's lean cloud-init picks based on node_role — this task just
-# ensures both units are present, unstarted, on every image regardless of
-# which role a given clone ends up playing.
-#
-# Explicitly pinned to rke2_rpm_version — an unpinned `dnf install -y
-# rke2-agent` always resolves to whatever's newest in the repo, the same
-# failure mode as the rke2-common task above but for the agent package
-# itself rather than a dependency.
+# Without this, only rke2-server.service exists, so a worker clone's
+# cloud-init `systemctl enable --now rke2-agent.service` fails outright.
+# Role selection (which unit to enable) is a launch-time decision — this
+# just ensures both are present, unstarted, on every image. Explicitly
+# pinned for the same reason as rke2-common above.
 - name: rke2 | also install rke2-agent (get.rke2.io only installs rke2-server by default)
   ansible.builtin.shell:
     cmd: |
@@ -212,13 +175,10 @@
     creates: /usr/lib/systemd/system/rke2-agent.service
   when: bake_install_rke2
 
-# Pre-rendered on the Packer build host (each provider's build.sh — e.g.
-# packer/proxmox/build.sh — runs `helm template` there, not here) and copied
-# in as plain files — this VM never runs helm itself or reaches a chart
-# repo. node-bootstrap applies whichever
-# of these are relevant to a given cluster at first boot (a per-cluster
-# runtime decision, e.g. CNI choice/GitOps enablement — unrelated to whether
-# the file exists on this template).
+# Pre-rendered on the Packer build host (each provider's build.sh runs helm
+# template there, not here) and copied in as plain files — this VM never
+# runs helm or reaches a chart repo. node-bootstrap applies whichever of
+# these a given cluster needs at first boot.
 - name: gitops | create the genesis manifests directory
   ansible.builtin.file:
     path: /opt/kube-compute/manifests
@@ -240,16 +200,10 @@
     - { src: "{{ rendered_manifests_dir }}/00-argocd.yaml", dest: "00-argocd.yaml" }
   when: bake_copy_gitops_manifests
 
-# capi-install.yaml (the concatenated CAPI core + CAPMOX install manifest,
-# rendered on the build host by build.sh's render_capi_manifests()) is baked
-# into the Proxmox image unconditionally — playbook-proxmox.yml leaves
-# bake_stage_capi_manifests at its default (true). Whether a given cluster
-# actually needs it (cluster_autoscaler_enabled) is a per-cluster runtime
-# decision made at bootstrap.sh/terraform-apply time, same as GitOps
-# enablement above — this role bakes it in regardless of that, gated only
-# on bake_stage_capi_manifests (a build-time toggle, not a cluster-level
-# one). AWS has no CAPI/CAPMOX equivalent yet, so playbook-aws.yml sets
-# bake_stage_capi_manifests: false and this task is skipped there.
+# Baked in unconditionally on Proxmox (playbook-proxmox.yml leaves
+# bake_stage_capi_manifests at its true default); whether a cluster actually
+# needs it is a runtime decision at bootstrap.sh/apply time. AWS has no
+# CAPI/CAPMOX equivalent yet, so playbook-aws.yml sets this false.
 - name: capi | copy the rendered CAPI install manifest
   ansible.builtin.copy:
     src: "{{ rendered_capi_manifests_dir }}/capi-install.yaml"
@@ -259,8 +213,8 @@
     group: root
   when: bake_stage_capi_manifests
 
-# Everything below is template-prep cleanup and MUST stay last: clones must not
-# inherit this builder's machine identity, SSH host keys, or the Packer
+# Everything below is template-prep cleanup and MUST stay last: clones must
+# not inherit this builder's machine identity, SSH host keys, or the Packer
 # build-time SSH key, and cloud-init must re-run fresh on every clone.
 - name: template-prep | clean cloud-init state so clones re-run it fresh
   ansible.builtin.command: cloud-init clean --logs --seed

@@ -1,21 +1,12 @@
 #!/usr/bin/env bash
-# Destroys old kube-image-built Proxmox templates, keeping the N most recent.
-#
-# Packer has no artifact retention of its own (no 'packer destroy', no build
-# history — every 'packer build' just creates one template and exits), so
-# this talks to the Proxmox API directly instead, the same way people prune
-# old AMIs/GCP images alongside Packer elsewhere. Selects VMs by the tags
-# template.pkr.hcl sets ("kube-image" + "template") and explicitly excludes
-# "seed-template" so the seed itself is never touched. Sorts by name — safe
-# because the name embeds the build date last
-# (almalinux10-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>)
-# in YYYY-MM-DD order, so a lexicographic sort is also date order (in
-# practice; still sorts sensibly across differing version widths since
-# YYYY-MM-DD dominates the tail of the string).
+# Destroys old kube-image Proxmox templates, keeping the N most recent.
+# Packer has no artifact retention of its own, so this talks to the Proxmox
+# API directly. Selects VMs tagged "kube-image"+"template", explicitly
+# excluding "seed-template". Sorts by name — safe because the build date is
+# the last segment (YYYY-MM-DD), so lexicographic order is also date order.
 #
 # Usage: ./prune-images.sh --node <proxmox-node> [--keep N] [--dry-run] [--yes]
-#   --node      Proxmox node the templates live on (required; matches
-#               proxmox_node in proxmox.auto.pkrvars.hcl)
+#   --node      Proxmox node the templates live on (required)
 #   --keep      How many most-recent templates to keep (default: 3)
 #   --dry-run   List what would be destroyed, change nothing
 #   --yes       Skip the confirmation prompt
@@ -62,10 +53,8 @@ fi
 
 AUTH_HEADER="Authorization: PVEAPIToken=${PROXMOX_VE_API_TOKEN}"
 
-# -k: self-signed PVE certs are this project's assumed default everywhere else
-# (seed/variables.tf's proxmox_insecure, variables.pkr.hcl's
-# proxmox_insecure_skip_tls_verify both default true) — drop it if your PVE
-# uses a cert you trust.
+# -k: self-signed PVE certs are this project's assumed default; drop it if
+# your PVE uses a cert you trust.
 mapfile -t VMS < <(
   curl -fsSk -H "$AUTH_HEADER" "${PROXMOX_VE_ENDPOINT}/api2/json/nodes/${NODE}/qemu" |
     python3 -c "

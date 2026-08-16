@@ -36,10 +36,9 @@ resource "proxmox_virtual_environment_file" "vendor_data" {
   }
 }
 
-# Created directly as a template (template = true) rather than created-then-converted
-# — unverified against a real Proxmox apply (this environment has no Proxmox access);
-# if a real apply shows the provider needs template=true applied as a follow-up
-# update rather than at creation, that's a one-line fix, not a design change.
+# Created directly as a template (template = true); unverified against a
+# real Proxmox apply — if that needs template=true as a follow-up update
+# instead, it's a one-line fix.
 resource "proxmox_virtual_environment_vm" "seed" {
   name      = "kube-image-seed-almalinux-10"
   node_name = var.proxmox_node
@@ -56,11 +55,8 @@ resource "proxmox_virtual_environment_vm" "seed" {
     enabled = true
   }
 
-  # See variables.tf's cpu_type for why this defaults to "host" rather than
-  # kube-compute's own "x86-64-v2-AES" default — that named QEMU model produced
-  # the identical panic on real hardware, "host" doesn't (this VM never boots
-  # anyway, started=false, but keeping it consistent with the Packer clone's
-  # config in case anyone boots the seed directly for validation).
+  # See variables.tf's cpu_type — kept consistent with the Packer clone's
+  # own cpu_type even though this VM never boots (started=false).
   cpu {
     cores = 1
     type  = var.cpu_type
@@ -90,9 +86,8 @@ resource "proxmox_virtual_environment_vm" "seed" {
     type = "l26"
   }
 
-  # Native Proxmox cloud-init user_account, not a Packer-side cloud-init override —
-  # this is what lets Packer's proxmox-clone source (and its own SSH communicator)
-  # connect to every clone without any manual seed customization step.
+  # Native Proxmox cloud-init user_account lets Packer's proxmox-clone
+  # source connect to every clone with no manual seed customization step.
   initialization {
     datastore_id        = var.disk_datastore_id
     vendor_data_file_id = proxmox_virtual_environment_file.vendor_data.id

@@ -1,32 +1,17 @@
 {
-  // Targets macOS, WSL2, and native Windows+Docker Desktop (no WSL2 needed
-  // for the container itself — see the remaining caveat below).
+  // Targets macOS, WSL2, and native Windows+Docker Desktop. initializeCommand
+  // runs on the host before the container exists, so it uses the array form
+  // (execs the named file directly, no shell) rather than a string (which
+  // would run under cmd.exe on native Windows, breaking Unix-style flags) —
+  // Unix resolves `initialize`, Windows resolves `initialize.cmd`. Same
+  // technique as https://github.com/EliahKagan/portable-initialize.
   //
-  // initializeCommand runs on the HOST, before the container exists, so it
-  // can't go through a Linux shell the way postCreateCommand etc. do. A
-  // *string* value is documented to run via a shell — /bin/sh on Unix hosts,
-  // but cmd.exe on native Windows (confirmed empirically: "mkdir -p ..."
-  // under cmd.exe errors, since cmd's mkdir has no -p flag and treats it as
-  // a literal bogus directory name). The *array* form below instead execs
-  // the named file directly, no shell involved, and each host OS's own
-  // executable-resolution rules pick the right file: Unix runs the
-  // extensionless `initialize` (a POSIX script), Windows resolves the same
-  // bare name to `initialize.cmd` instead. See both files for what each
-  // actually does — same effect (ensure the mount sources below exist),
-  // different syntax. Same dual-script technique documented at
-  // https://github.com/EliahKagan/portable-initialize.
-  //
-  // Remaining caveat, not fixed by the above: the ~/.ssh mount further down
-  // needs real Unix permission bits (600 on the private key) to be usable by
-  // ssh/git/Packer's SSH communicator, and a native-Windows NTFS bind mount
-  // has no real Unix permission bits to begin with — write-env.sh's chmod
-  // pass may not reliably take effect there the way it does on macOS/Linux/
-  // WSL2. If SSH-key-dependent operations (Packer's Proxmox build; git over
-  // SSH) fail specifically on native Windows with a key-permission error,
-  // open this repo from WITHIN a WSL2 distro's own filesystem instead (not
-  // a /mnt/c/... path) — WSL2's filesystem is real ext4, so permissions work
-  // exactly like macOS/Linux. UNVERIFIED against a real Windows/WSL2
-  // machine — this environment has neither.
+  // Native Windows without WSL2: the ~/.ssh mount needs real Unix permission
+  // bits, which an NTFS bind mount doesn't have — write-env.sh's chmod pass
+  // may not take effect there. If SSH-key-dependent operations fail with a
+  // key-permission error, open this repo from within a WSL2 distro's own
+  // filesystem instead (not /mnt/c/...). Unverified against a real
+  // Windows/WSL2 machine.
   //
   // renovate: datasource=docker depName=ghcr.io/bbaliyan/kube-devenv
   "image": "ghcr.io/bbaliyan/kube-devenv:0.8.2",
@@ -36,16 +21,12 @@
   "postCreateCommand": "bash .devcontainer/write-env.sh && bash .devcontainer/post-create.sh",
 
   "mounts": [
-    // ${localEnv:HOME}${localEnv:USERPROFILE} is not a typo: on any given
-    // host only one of the two resolves to a non-empty string (HOME on
-    // macOS/Linux/WSL2, USERPROFILE on a native Windows shell), so
-    // concatenating both always yields exactly the one real path. Same
-    // trick applied to every mount below for the same reason.
+    // ${localEnv:HOME}${localEnv:USERPROFILE}: only one resolves to a
+    // non-empty string per host (HOME on macOS/Linux/WSL2, USERPROFILE on
+    // native Windows), so concatenating both yields the one real path.
     //
-    // Not readonly (unlike kube-examples' otherwise-identical .ssh mount):
-    // write-env.sh below chmods the keys after mount, which a readonly bind
-    // mount would reject. Safe on macOS/Linux/WSL2, where the perms it sets
-    // already match what a normal ~/.ssh has.
+    // Not readonly: write-env.sh chmods the keys after mount, which a
+    // readonly bind mount would reject.
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.ssh,target=/root/.ssh,type=bind",
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.kube-compute,target=/root/.kube-compute,type=bind",
     "source=${localEnv:HOME}${localEnv:USERPROFILE}/.aws,target=/root/.aws,type=bind"
@@ -53,10 +34,8 @@
 
   "remoteEnv": {
     "BASH_ENV": "/etc/kube-compute-env.sh",
-    // Resolved via the ~/.aws mount above (profile or access key) — matches
-    // kube-examples' devcontainer. Alternatively set
-    // AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in your shell profile before
-    // opening VS Code.
+    // Resolved via the ~/.aws mount above. Alternatively set
+    // AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY in your shell profile.
     "AWS_PROFILE": "${localEnv:AWS_PROFILE}"
   },
 

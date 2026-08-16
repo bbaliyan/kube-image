@@ -1,5 +1,5 @@
 variable "proxmox_insecure" {
-  description = "Skip TLS certificate verification for the Proxmox API — true for a self-signed PVE cert (the common homelab case), false once PVE uses a cert you trust."
+  description = "Skip TLS certificate verification for the Proxmox API — true for a self-signed PVE cert (the common case)."
   type        = bool
   default     = true
 }
@@ -10,25 +10,25 @@ variable "proxmox_node" {
 }
 
 variable "cpu_type" {
-  description = "QEMU CPU model for the seed VM. Defaults to 'host' (exactly what the physical Proxmox node supports) rather than kube-compute's own 'x86-64-v2-AES' default — that named QEMU model can claim CPUID features KVM can't actually back on some real hardware, confirmed on a Dell PowerEdge T630/older Xeon (produced the same very-early kernel panic Proxmox's 'kvm64' default does). This VM never actually boots (started=false below), but kept consistent with ../variables.pkr.hcl's cpu_type for the Packer clone that does."
+  description = "QEMU CPU model for the seed VM. Defaults to 'host' — see packer/proxmox/template.pkr.hcl's cpu_type for why. This VM never boots (started=false below); kept consistent for anyone booting the seed directly to validate."
   type        = string
   default     = "host"
 }
 
 variable "proxmox_ssh_user" {
-  description = "PAM (Linux) user on the Proxmox host that bpg/proxmox connects as via SSH to upload the vendor-data snippet. Defaults to the dedicated 'tofu' PAM user this project's Proxmox consumers already provision for bpg/proxmox SSH access (see kube-examples' live/proxmox/README.md, \"One-time: user and token setup\") — PVE root SSH login is not assumed to be enabled or key-authorized, and this project deliberately keeps the PVE-ops key separate from the per-VM guest-access key (ssh_public_key_path below) to limit blast radius."
+  description = "PAM user on the Proxmox host that bpg/proxmox connects as via SSH to upload the vendor-data snippet. Defaults to the dedicated 'tofu' PAM user this project's Proxmox consumers already provision (kube-examples' live/proxmox/README.md) — kept separate from the per-VM guest-access key below to limit blast radius."
   type        = string
   default     = "tofu"
 }
 
 variable "proxmox_ssh_key_file" {
-  description = "SSH private key for proxmox_ssh_user, used only for the snippet upload. Defaults to the same PVE-ops key (distinct from the guest-access key below) kube-examples' devcontainer already mounts and bpg/proxmox already uses for cloud-init/vendor-data snippet uploads elsewhere in this project. Ignored when proxmox_ssh_password is set."
+  description = "SSH private key for proxmox_ssh_user, used only for the snippet upload. Ignored when proxmox_ssh_password is set."
   type        = string
   default     = "~/.ssh/id_ed25519_tofu"
 }
 
 variable "proxmox_ssh_password" {
-  description = "Password for proxmox_ssh_user, as an alternative to proxmox_ssh_key_file if you haven't set up an SSH key for the PVE host. Sensitive — pass via TF_VAR_proxmox_ssh_password or -var on the command line, never a committed .tfvars file. Null (the default) uses proxmox_ssh_key_file instead."
+  description = "Password for proxmox_ssh_user, as an alternative to proxmox_ssh_key_file. Sensitive — pass via TF_VAR_proxmox_ssh_password or -var, never a committed .tfvars file."
   type        = string
   default     = null
   sensitive   = true
@@ -45,7 +45,7 @@ variable "disk_datastore_id" {
 }
 
 variable "iso_datastore_id" {
-  description = "Proxmox storage ID for the downloaded OS image and the qemu-guest-agent vendor-data snippet. Must support both the 'import' and 'snippets' content types. Often the same value as disk_datastore_id, but Proxmox distinguishes the content types, so kept separate."
+  description = "Proxmox storage ID for the downloaded OS image and the qemu-guest-agent vendor-data snippet. Must support both the 'import' and 'snippets' content types."
   type        = string
 }
 
@@ -56,7 +56,7 @@ variable "vm_id" {
 }
 
 variable "os_image_url" {
-  description = "URL of the AlmaLinux 10 GenericCloud qcow2 image to download and use as the seed template's disk. Defaults to the upstream AlmaLinux mirror — override only if you need a different mirror or a non-default AlmaLinux 10 build."
+  description = "URL of the AlmaLinux 10 GenericCloud qcow2 image to download and use as the seed template's disk."
   type        = string
   default     = "https://repo.almalinux.org/almalinux/10/cloud/x86_64/images/AlmaLinux-10-GenericCloud-latest.x86_64.qcow2"
 }
@@ -68,7 +68,7 @@ variable "os_image_file_name" {
 }
 
 variable "disk_size_gb" {
-  description = "Seed template disk size in GB. Must be at least the source image's virtual size (AlmaLinux 10 GenericCloud's default virtual size is well under 10GB)."
+  description = "Seed template disk size in GB. Must be at least the source image's virtual size."
   type        = number
   default     = 10
 }
@@ -80,13 +80,13 @@ variable "network_bridge" {
 }
 
 variable "ssh_username" {
-  description = "Cloud-init user baked into the seed template via a native Proxmox cloud-init user_account block (not a Packer-side setting) — every kube-image Packer build's proxmox-clone source connects as this user. Must match packer/proxmox/variables.pkr.hcl's ssh_username."
+  description = "Cloud-init user baked into the seed template. Must match packer/proxmox/variables.pkr.hcl's ssh_username."
   type        = string
   default     = "almalinux"
 }
 
 variable "ssh_public_key_path" {
-  description = "Path to the SSH public key authorized for ssh_username via the seed template's cloud-init user_account block. Defaults to this project's dedicated guest-access key (distinct from proxmox_ssh_key_file's PVE-ops key above) — same key kube-compute's own node-bootstrap/Ansible already uses to reach cluster VMs. Must correspond to the private key packer/proxmox/variables.pkr.hcl's ssh_private_key_file points at."
+  description = "Path to the SSH public key authorized for ssh_username. Must correspond to the private key packer/proxmox/variables.pkr.hcl's ssh_private_key_file points at."
   type        = string
   default     = "~/.ssh/id_ed25519_kube_cluster.pub"
 }

@@ -1,20 +1,14 @@
-# proxmox_url / proxmox_api_token_id / proxmox_api_token_secret are NOT listed
-# here — inside the devcontainer they're auto-populated as PKR_VAR_proxmox_url
-# / PKR_VAR_proxmox_api_token_id / PKR_VAR_proxmox_api_token_secret, derived
-# from PROXMOX_VE_ENDPOINT/PROXMOX_VE_API_TOKEN by .devcontainer/write-env.sh.
-# Uncomment and set them here only if building outside that devcontainer:
+# proxmox_url/proxmox_api_token_id/proxmox_api_token_secret are NOT listed
+# here — inside the devcontainer they're auto-populated from
+# PROXMOX_VE_ENDPOINT/PROXMOX_VE_API_TOKEN. Set them here only if building
+# outside that devcontainer:
 # proxmox_url               = "https://pve.example.com:8006/api2/json"
 # proxmox_api_token_id      = "root@pam!packer"
 # proxmox_api_token_secret  = "REPLACE_ME"
 
-# k8s_version / cilium_version / argocd_version are deliberately NOT set here
-# (or in any .auto.pkrvars.hcl) — build.sh resolves them automatically from
-# kube-platform's platform/platform-versions/values.yaml before every build,
-# so the baked image can never silently drift from what Argo CD will
-# actually run once it adopts the genesis install. A var-file entry of the
-# same name outranks build.sh's PKR_VAR_* export and would silently defeat
-# this — if you need a specific pin, export PKR_VAR_k8s_version (etc.) at the
-# shell instead, which build.sh's fetch only fills in when unset.
+# k8s_version/cilium_version/argocd_version are deliberately NOT set here —
+# build.sh resolves them automatically before every build. A var-file entry
+# of the same name would silently outrank that resolution; see README.md.
 
 proxmox_node                     = "pve"
 seed_template_vm_id              = 9000
