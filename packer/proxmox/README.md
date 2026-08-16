@@ -145,19 +145,28 @@ kube-platform's `platform-versions.yaml` — `capiCoreVersion`/
 `clusterctl generate provider`. Building requires a `clusterctl` binary on
 the build host and network access to `raw.githubusercontent.com`/the
 provider repos it fetches manifests from. CAPMOX's `--infrastructure`
-generation templates its manager credentials `Secret` from
-`PROXMOX_URL`/`PROXMOX_TOKEN`/`PROXMOX_SECRET` (CAPMOX's own naming,
-distinct from bpg/proxmox's `PROXMOX_VE_*` and this script's own
-`PKR_VAR_*`) — `build.sh` re-derives these automatically from
-`PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN`, same as it already does for
-`PKR_VAR_proxmox_url`/`_api_token_id`/`_api_token_secret`, so no separate
-manual export is needed when those are already set (e.g. via
-`kube-proxmox-login`). `build.sh` fails loudly if `PROXMOX_VE_ENDPOINT`/
-`PROXMOX_VE_API_TOKEN` (or the three `PROXMOX_*` vars directly) aren't set,
-rather than baking an empty/placeholder credentials `Secret`. Requires
-kube-platform's `platform/platform-versions/values.yaml` to carry
-`capiCoreVersion`/`capmoxVersion` — not present until that repo's own
-version-pin change lands.
+generation templates a manager-wide credentials `Secret`
+(`capmox-manager-credentials`, `capmox-system` namespace) from
+`PROXMOX_URL`/`PROXMOX_TOKEN`/`PROXMOX_SECRET` (CAPMOX's own naming, distinct
+from bpg/proxmox's `PROXMOX_VE_*` and this script's own `PKR_VAR_*`).
+
+**`build.sh` deliberately sets these three to fixed, non-functional
+placeholder values — never the real Proxmox endpoint/token.** Whatever lands
+in this Secret is baked, in plaintext, into `capi-install.yaml`, which is
+copied onto every VM image and applied on every cluster's genesis node — a
+real credential there would be a standing leak, readable from disk on every
+VM ever cloned from the template, whether or not CAPMOX ever consults it. It
+doesn't need to be real: every `ProxmoxCluster` this project renders
+(`kube-compute`'s `cluster-autoscaler-workers.yaml.tftpl`) sets its own
+`spec.credentialsRef`, which CAPMOX's controller prefers over the
+manager-wide Secret — real, per-cluster credentials are delivered instead by
+the consumer repo at runtime (e.g. via External Secrets Operator pulling from
+a vault), never baked into the image. A cluster whose `credentialsRef` Secret
+is missing or wrong fails loudly (CAPMOX rejects the placeholder host, or a
+real 401), rather than silently reconciling against a leaked fallback
+credential. Requires kube-platform's `platform/platform-versions/values.yaml`
+to carry `capiCoreVersion`/`capmoxVersion` — not present until that repo's
+own version-pin change lands.
 
 ## Pruning old builds
 

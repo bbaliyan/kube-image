@@ -27,27 +27,30 @@ if [ -n "${PROXMOX_VE_API_TOKEN:-}" ]; then
 fi
 
 # CAPMOX (clusterctl generate provider --infrastructure, in
-# render_capi_manifests below) reads its manager credentials from
-# PROXMOX_URL/PROXMOX_TOKEN/PROXMOX_SECRET — CAPMOX's own naming, distinct
-# from both PROXMOX_VE_* (bpg/proxmox's Terraform provider) and PKR_VAR_* (this
-# script's own Packer vars) even though it's the same underlying credentials.
-# Re-derive here too so a plain './build.sh .' works right after
-# kube-proxmox-login, same as the PKR_VAR_* derivation above.
+# render_capi_manifests below) templates a manager-wide credentials Secret
+# (capmox-manager-credentials, capmox-system namespace) from
+# PROXMOX_URL/PROXMOX_TOKEN/PROXMOX_SECRET env vars — CAPMOX's own naming,
+# distinct from both PROXMOX_VE_* (bpg/proxmox's Terraform provider) and
+# PKR_VAR_* (this script's own Packer vars).
 #
-# NOT the same "+/api2/json" transform as PKR_VAR_proxmox_url above: that
-# suffix is bpg/proxmox's own convention, but CAPMOX's Go client (ionos-cloud/
-# cluster-api-provider-proxmox) appends "/api2/json" itself when it builds API
-# calls. Suffixing it here too doubled the path — confirmed on a real apply,
-# capmox-controller-manager crashed at startup unable to reach the Proxmox API
-# ("Get https://<host>:8006/api2/json/api2/json/version: ..."). PROXMOX_URL
-# must be the bare Proxmox base URL.
-if [ -n "${PROXMOX_VE_ENDPOINT:-}" ]; then
-  export PROXMOX_URL="${PROXMOX_VE_ENDPOINT}"
-fi
-if [ -n "${PROXMOX_VE_API_TOKEN:-}" ]; then
-  export PROXMOX_TOKEN="${PROXMOX_VE_API_TOKEN%%=*}"
-  export PROXMOX_SECRET="${PROXMOX_VE_API_TOKEN#*=}"
-fi
+# Deliberately NOT re-derived from the real PROXMOX_VE_* credentials (a prior
+# revision of this script did that): whatever lands in these three vars gets
+# baked, in plaintext, into capi-install.yaml, which is copied onto every VM
+# image this script builds (ansible/roles/rke2_bake_common's `copy` task) and
+# applied to every cluster's genesis node. A real Proxmox API token baked into
+# a disk image is a standing credential leak — present on disk, in every VM
+# cloned from the template, indefinitely, regardless of whether CAPMOX ever
+# actually uses it. It doesn't need to be real: every ProxmoxCluster this
+# project renders (kube-compute's cluster-autoscaler-workers.yaml.tftpl) sets
+# its own spec.credentialsRef, which CAPMOX's controller uses in place of the
+# manager-wide Secret for that object's reconciliation — so the manager-wide
+# Secret is never actually consulted for a correctly-configured cluster. Fixed
+# placeholder values here (never the real endpoint/token) mean a stale/failed
+# credentialsRef fails loudly (CAPMOX rejects the placeholder host, or a real
+# 401 against Proxmox) instead of silently succeeding via a leaked fallback.
+export PROXMOX_URL="https://credentials-ref-required.invalid:8006"
+export PROXMOX_TOKEN="unset@pve!unset"
+export PROXMOX_SECRET="unset"
 
 # ---- k8s/Cilium/Argo CD/CAPI version resolution -----------------------------
 # Same pin kube-compute's component-versions module carries
@@ -99,12 +102,14 @@ render_capi_manifests() {
   local out_dir="$1" # e.g. "$render_dir/capi"
   mkdir -p "$out_dir"
 
-  # clusterctl generate provider --infrastructure templates a manager
-  # credentials Secret from these env vars — required, not optional. Fail
-  # loudly rather than silently rendering with empty/placeholder credentials.
-  : "${PROXMOX_URL:?render_capi_manifests requires PROXMOX_URL for CAPMOX credentials Secret}"
-  : "${PROXMOX_TOKEN:?render_capi_manifests requires PROXMOX_TOKEN for CAPMOX credentials Secret}"
-  : "${PROXMOX_SECRET:?render_capi_manifests requires PROXMOX_SECRET for CAPMOX credentials Secret}"
+  # clusterctl generate provider --infrastructure requires these three env
+  # vars to be non-empty to template the manager credentials Secret at all —
+  # not a signal that they need to be real (see the placeholder values set
+  # above this function). Fail loudly only if unset entirely (e.g. this
+  # function called directly without sourcing the rest of this script).
+  : "${PROXMOX_URL:?render_capi_manifests requires PROXMOX_URL (placeholder is fine — see comment above)}"
+  : "${PROXMOX_TOKEN:?render_capi_manifests requires PROXMOX_TOKEN (placeholder is fine — see comment above)}"
+  : "${PROXMOX_SECRET:?render_capi_manifests requires PROXMOX_SECRET (placeholder is fine — see comment above)}"
 
   clusterctl generate provider --core "cluster-api:${PKR_VAR_capi_core_version}" \
     --write-to "${out_dir}/00-capi-core.yaml"
