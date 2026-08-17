@@ -24,4 +24,13 @@ fi
 
 echo "Profiling build — full output also saved to ${log_file}" >&2
 
-"${script_dir}/build.sh" "$@" 2>&1 | tee "${log_file}"
+# Redirects this shell's own output through tee via process substitution,
+# rather than piping build.sh's invocation into tee. The latter runs build.sh
+# as the left half of a pipeline: Ctrl-C then returns control once tee (the
+# pipeline's last stage) exits, without waiting for packer build — several
+# process levels down inside build.sh — to finish its own graceful cleanup
+# (terminate instance, delete temp SG/keypair), leaving them orphaned. This
+# form keeps build.sh as this script's own direct foreground child, so Ctrl-C
+# blocks until Packer's real cleanup is done, same as a plain './build.sh .'.
+exec > >(tee "${log_file}") 2>&1
+"${script_dir}/build.sh" "$@"
