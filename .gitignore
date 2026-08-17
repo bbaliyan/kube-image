@@ -3,6 +3,7 @@ packer_cache/
 *.pkrvars.hcl
 !*.pkrvars.hcl.example
 crash.log
+build-logs/
 
 *.pem
 

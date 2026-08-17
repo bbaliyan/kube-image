@@ -70,6 +70,28 @@ the other.
    `kube-compute` apply time because Argo CD's chart alone is ~1.9 MB with
    CRDs, too large for `node-bootstrap`'s cloud-init payload.
 
+## Profiling a slow build
+
+`./build-profile.sh .` runs the same build as `./build.sh .` with Packer/
+Ansible timing instrumentation turned on, and tees the full output to
+`build-logs/<timestamp>.log` for later review:
+
+- `PACKER_BUILD_TIMESTAMPS=1` timestamps every Packer console line, so you
+  can diff timestamps between phases (launch, SSH wait, provisioning, AMI
+  registration).
+- `ANSIBLE_CALLBACKS_ENABLED=profile_tasks,timer` prints each Ansible task's
+  duration as it finishes, plus a slowest-first summary and total playbook
+  runtime at the end.
+
+Both env vars can be overridden before calling the script if you want
+different values; otherwise these are the defaults. Note that `shell`/
+`command` module output (e.g. `dnf update -y`) is only visible once a task
+finishes — Ansible doesn't stream it live regardless of verbosity. For
+genuine real-time visibility into a single long-running task, connect to
+the build instance directly with `aws ssm start-session --target <instance-id>`
+(the ID is printed early in the build log) and tail e.g. `journalctl -f` or
+`/var/log/dnf.log` there.
+
 ## Base image
 
 `data "amazon-ami" "almalinux10"` in `template.pkr.hcl` matches

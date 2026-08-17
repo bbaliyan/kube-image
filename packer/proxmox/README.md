@@ -103,6 +103,28 @@ way `build.sh` does, and pass `-var rendered_manifests_dir=...` and
 default, so a bare `packer build` fails immediately instead of baking a
 stale or empty manifest.
 
+## Profiling a slow build
+
+`./build-profile.sh .` runs the same build as `./build.sh .` with Packer/
+Ansible timing instrumentation turned on, and tees the full output to
+`build-logs/<timestamp>.log` for later review:
+
+- `PACKER_BUILD_TIMESTAMPS=1` timestamps every Packer console line, so you
+  can diff timestamps between phases (clone, SSH wait, provisioning,
+  template conversion).
+- `ANSIBLE_CALLBACKS_ENABLED=profile_tasks,timer` prints each Ansible task's
+  duration as it finishes, plus a slowest-first summary and total playbook
+  runtime at the end.
+
+Both env vars can be overridden before calling the script if you want
+different values; otherwise these are the defaults. Note that `shell`/
+`command` module output (e.g. `dnf update -y`) is only visible once a task
+finishes — Ansible doesn't stream it live regardless of verbosity. For
+genuine real-time visibility into a single long-running task, SSH into the
+build VM directly with the same `ssh_username`/keypair Packer uses (its IP
+is printed early in the build log), or open its console from the Proxmox
+UI, and tail e.g. `journalctl -f` or `/var/log/dnf.log` there.
+
 ## CAPI/CAPMOX install manifest
 
 This template unconditionally stages
