@@ -95,12 +95,15 @@ fi
 # abort the rest of the list, so failures are collected and reported at the
 # end instead.
 delete_role_with_retry() {
-  local role_name="$1" attempt
+  local role_name="$1" attempt output
   for attempt in 1 2 3 4 5; do
-    if aws iam delete-role --role-name "$role_name" 2>/dev/null; then
+    if output="$(aws iam delete-role --role-name "$role_name" 2>&1)"; then
       return 0
     fi
-    [ "$attempt" -eq 5 ] && return 1
+    if [ "$attempt" -eq 5 ]; then
+      echo "  ${output}" >&2
+      return 1
+    fi
     sleep 5
   done
 }
