@@ -10,7 +10,11 @@ mkdir -p "${log_dir}"
 log_file="${log_dir}/$(date -u +%Y%m%dT%H%M%SZ).log"
 
 export PACKER_BUILD_TIMESTAMPS="${PACKER_BUILD_TIMESTAMPS:-1}"
-export ANSIBLE_CALLBACKS_ENABLED="${ANSIBLE_CALLBACKS_ENABLED:-profile_tasks,timer}"
+# profile_tasks/timer live in community.general, not ansible-core — kube-devenv
+# deliberately ships only bare ansible-core, so install it here rather than
+# growing the base image for a debugging-only dependency.
+ansible-galaxy collection install community.general >/dev/null
+export ANSIBLE_CALLBACKS_ENABLED="${ANSIBLE_CALLBACKS_ENABLED:-community.general.profile_tasks,community.general.timer}"
 
 # build.sh forwards $@ straight to 'packer init', which requires a TEMPLATE
 # argument — default to the current directory, the usual `./build.sh .` call.

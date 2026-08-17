@@ -112,9 +112,11 @@ Ansible timing instrumentation turned on, and tees the full output to
 - `PACKER_BUILD_TIMESTAMPS=1` timestamps every Packer console line, so you
   can diff timestamps between phases (clone, SSH wait, provisioning,
   template conversion).
-- `ANSIBLE_CALLBACKS_ENABLED=profile_tasks,timer` prints each Ansible task's
-  duration as it finishes, plus a slowest-first summary and total playbook
-  runtime at the end.
+- `ANSIBLE_CALLBACKS_ENABLED=community.general.profile_tasks,community.general.timer`
+  prints each Ansible task's duration as it finishes, plus a slowest-first
+  summary and total playbook runtime at the end. `community.general` isn't
+  part of `kube-devenv`'s bare `ansible-core` install (see its Dockerfile);
+  the script installs it via `ansible-galaxy` before every run.
 
 Both env vars can be overridden before calling the script if you want
 different values; otherwise these are the defaults. Note that `shell`/
