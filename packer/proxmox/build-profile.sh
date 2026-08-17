@@ -12,8 +12,16 @@ log_file="${log_dir}/$(date -u +%Y%m%dT%H%M%SZ).log"
 export PACKER_BUILD_TIMESTAMPS="${PACKER_BUILD_TIMESTAMPS:-1}"
 # profile_tasks/timer live in community.general, not ansible-core — kube-devenv
 # deliberately ships only bare ansible-core, so install it here rather than
-# growing the base image for a debugging-only dependency.
-ansible-galaxy collection install community.general >/dev/null
+# growing the base image for a debugging-only dependency. Installed to a
+# script-local dir and pointed at explicitly via ANSIBLE_COLLECTIONS_PATH
+# instead of trusting ansible-galaxy's and ansible-playbook's default search
+# paths to agree — they didn't (galaxy install "succeeded" but ansible-playbook
+# still warned "unable to load", implying a mismatch neither is worth chasing
+# further when pinning both ends removes the ambiguity outright).
+collections_dir="${script_dir}/.ansible-collections"
+mkdir -p "${collections_dir}"
+ansible-galaxy collection install community.general -p "${collections_dir}" >/dev/null
+export ANSIBLE_COLLECTIONS_PATH="${collections_dir}"
 export ANSIBLE_CALLBACKS_ENABLED="${ANSIBLE_CALLBACKS_ENABLED:-community.general.profile_tasks,community.general.timer}"
 
 # build.sh forwards $@ straight to 'packer init', which requires a TEMPLATE

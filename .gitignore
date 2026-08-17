@@ -9,6 +9,7 @@ build-logs/
 
 # Ansible
 *.retry
+.ansible-collections/
 
 # Editor/OS
 .DS_Store
