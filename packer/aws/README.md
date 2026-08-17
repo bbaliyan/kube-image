@@ -121,10 +121,12 @@ cluster-autoscaler integration yet (`ansible/playbook-aws.yml` sets
 ## AMI naming
 
 Self-descriptive:
-`almalinux10-<architecture>-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>`
+`almalinux10-<architecture>-kube-image-<k8s_version>-<cilium_version>-<argocd_version>-<build-date>-<build-suffix>`
 (`k8s_version`'s `+` sanitized to `-`, since AWS AMI names disallow it).
 `<architecture>` is included so a same-day x86_64 and arm64 build don't
-collide — AWS AMI names must be unique per account/region. Point
+collide; `<build-suffix>` (an 8-char random id, or your CI's `BUILD_ID` env
+var if set — see "Multi-region replication") so two builds on the same day
+don't either — AWS AMI names must be unique per account/region. Point
 `kube-compute`'s `aws-control-plane`/`aws-node-pool` modules at the result
 via `os_image_ami_id`. The name is documentation only — kube-compute
 performs no compatibility check against it.
@@ -147,9 +149,11 @@ region_replicas = ["us-west-2", "eu-west-1"]
 ```
 
 Every AMI from one build — the original plus every replica — shares the
-same `build-id` tag (`<build-date>-<8-char-uuid>`, e.g.
-`2026-08-17-a1b2c3d4`). Consumer Terraform resolves the right regional AMI
-by filtering on that tag instead of hardcoding a per-region AMI ID:
+same `build-id` tag (`<build-date>-<build-suffix>`, e.g.
+`2026-08-17-a1b2c3d4` — an 8-char random id, or your CI's own `BUILD_ID` env
+var if set, so a pipeline's native run identifier can be used instead of a
+random one). Consumer Terraform resolves the right regional AMI by
+filtering on that tag instead of hardcoding a per-region AMI ID:
 
 ```hcl
 data "aws_ami" "kube_image" {

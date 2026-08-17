@@ -20,13 +20,17 @@ locals {
   build_date       = formatdate("YYYY-MM-DD", timestamp())
   k8s_version_safe = replace(var.k8s_version, "+", "-")
   distro_slug      = "almalinux10" # bump alongside the data.amazon-ami filter below
+  # A CI pipeline's own run identifier (env var BUILD_ID) wins when set;
+  # otherwise an 8-char random suffix, so two builds on the same day never
+  # collide — including two manual devcontainer builds run minutes apart.
+  build_suffix = env("BUILD_ID") != "" ? env("BUILD_ID") : substr(uuidv4(), 0, 8)
   # Identifies one build across every region it's replicated to. See
   # README.md's "Multi-region replication".
-  build_id = "${local.build_date}-${substr(uuidv4(), 0, 8)}"
+  build_id = "${local.build_date}-${local.build_suffix}"
   # var.ami_architecture is folded in so a same-day x86_64 and arm64 build
   # don't compute the same name — AWS AMI names must be unique per
-  # account/region.
-  image_name = coalesce(var.ami_name, "${local.distro_slug}-${var.ami_architecture}-kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}")
+  # account/region. build_suffix for the same reason across same-day reruns.
+  image_name = coalesce(var.ami_name, "${local.distro_slug}-${var.ami_architecture}-kube-image-${local.k8s_version_safe}-${var.cilium_version}-${var.argocd_version}-${local.build_date}-${local.build_suffix}")
 
   # var.extra_tags merged in last so it can add but not override.
   common_tags = merge({
