@@ -7,8 +7,8 @@ variable "aws_region" {
 
 variable "instance_type" {
   type        = string
-  default     = "c8i.large"
-  description = "EC2 instance type for the build instance. Unrelated to the instance type a consumer later launches from the resulting AMI. Non-burstable and CPU-heavier than a t3: 'dnf update -y' is the dominant cost of a build (profiled at ~60% of total build time) and is CPU/disk-bound, not network-bound."
+  default     = "c8a.medium"
+  description = "EC2 instance type for the build instance. Unrelated to the instance type a consumer later launches from the resulting AMI. Non-burstable: 'dnf update -y' is CPU/disk-bound, not network-bound, and is the dominant cost of a build."
 }
 
 variable "subnet_id" {
@@ -26,7 +26,7 @@ variable "vpc_id" {
 variable "ami_architecture" {
   type        = string
   default     = "x86_64"
-  description = "CPU architecture to build for — must match instance_type's supported architecture (e.g. arm64 for Graviton types like m7g.medium)."
+  description = "CPU architecture to build for — must match instance_type's supported architecture (e.g. arm64 for Graviton types like c8g.medium)."
 }
 
 variable "ami_name" {

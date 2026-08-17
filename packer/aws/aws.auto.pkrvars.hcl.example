@@ -12,7 +12,7 @@ aws_region = "us-east-1"
 # instance_type/ami_architecture left unset too, so a PKR_VAR_* override at
 # build time (e.g. an arm64 build) isn't silently defeated — see README's
 # "Building":
-# instance_type    = "c8i.large"
+# instance_type    = "c8a.medium"
 # ami_architecture = "x86_64"
 
 # extra_tags defaults to {} — see README's "Accounting tags":
