@@ -54,7 +54,7 @@ doesn't accept `-var`. `ami_architecture` alone isn't enough either, since
 the default `instance_type` (`c8a.medium`, x86_64-only) can't launch an arm64 AMI:
 
 ```bash
-PKR_VAR_ami_architecture=arm64 PKR_VAR_instance_type=c8g.medium ./build.sh .
+PKR_VAR_ami_architecture=arm64 PKR_VAR_instance_type=c9g.medium ./build.sh .
 ```
 
 Run both commands to produce one AMI of each architecture — the name

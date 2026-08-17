@@ -26,7 +26,7 @@ variable "vpc_id" {
 variable "ami_architecture" {
   type        = string
   default     = "x86_64"
-  description = "CPU architecture to build for — must match instance_type's supported architecture (e.g. arm64 for Graviton types like c8g.medium)."
+  description = "CPU architecture to build for — must match instance_type's supported architecture (e.g. arm64 for Graviton types like c9g.medium)."
 }
 
 variable "ami_name" {
