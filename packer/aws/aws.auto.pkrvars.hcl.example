@@ -2,6 +2,8 @@
 # build.sh resolves them automatically before every build. A var-file entry
 # of the same name would silently outrank that resolution; see README.md.
 
+# See README's "Region choice" for why us-east-1 is the recommended build
+# region regardless of where clusters actually run.
 aws_region = "us-east-1"
 
 # subnet_id/vpc_id left unset here — defaults to the account's default VPC.
@@ -22,4 +24,4 @@ aws_region = "us-east-1"
 # }
 
 # region_replicas defaults to [] — see README's "Multi-region replication":
-# region_replicas = ["us-west-2", "eu-west-1"]
+# region_replicas = ["eu-west-1"]  # wherever clusters actually run

@@ -144,6 +144,55 @@ The AMI/snapshot/build-instance tags also carry `architecture`,
 and cloned from, since `most_recent = true` can resolve differently build
 to build).
 
+## Region choice
+
+Build in `us-east-1`, replicate to wherever clusters actually run
+(`region_replicas`), rather than building locally in each consumption
+region:
+
+- **New instance-type generations land in `us-east-1` (and other US
+  regions) before Europe.** Confirmed directly here, not just by
+  reputation: `c9g` was available in `us-east-1` before it existed in
+  `eu-west-1`. This only affects the *builder* instance
+  (`instance_type`/`ami_architecture`) — an AMI's compatibility with
+  launch-time instance types depends on its OS image (drivers,
+  architecture), not on what type baked it, so building in `us-east-1`
+  does not change which instance types a consumer can launch *from* the
+  resulting AMI in any region. The benefit is a faster/cheaper build, not
+  earlier hardware access for the clusters that consume the image.
+- **`us-east-1` has the most favorable AWS pricing** across compute and
+  data-transfer rates generally, and inter-region transfer is billed on
+  the *source* region's rate — so a `us-east-1 → eu-west-1` replication
+  copy costs less than the reverse would.
+- **Trade-off accepted:** the consumption region (wherever `region_replicas`
+  points, e.g. `eu-west-1`) now depends on the replication step completing
+  before a fresh AMI is usable there, instead of being built locally with
+  zero replication lag. If a build's replica copy fails, the consumption
+  region has no new AMI until the build/copy is rerun — not a risk when
+  build region == consumption region.
+
+## Encryption
+
+AMIs/snapshots this project produces are not explicitly encrypted in
+`template.pkr.hcl` (no `encrypt_boot`/`kms_key_id` set) — deliberately.
+Check first whether the account already has **EBS encryption by default**
+enabled for every region this project builds in or replicates to:
+
+```bash
+aws ec2 get-ebs-encryption-by-default --region <region>
+```
+
+If enabled, every new volume/snapshot/AMI is transparently encrypted with
+that region's own default key (`alias/aws/ebs`) regardless of what Packer
+specifies, which makes `encrypt_boot = true` redundant. Setting it anyway
+would also force Packer into an extra copy-to-self step on the primary
+build when the source AMI is unencrypted (AlmaLinux's published AMI is) —
+real build-time cost for no additional protection on top of the account
+default. Revisit only if a customer-managed KMS key becomes an actual
+requirement (key rotation policy, cross-account AMI sharing, an audit
+trail tied to a named key) — the account default provides
+encryption-at-rest but not that.
+
 ## Multi-region replication
 
 Set `region_replicas` (a list of AWS regions, empty by default) in
