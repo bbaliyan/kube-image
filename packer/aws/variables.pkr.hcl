@@ -40,6 +40,12 @@ variable "ami_name" {
   description = "Overrides the self-descriptive computed AMI name (see README.md's \"AMI naming\"). Leave unset in normal use."
 }
 
+variable "build_id_override" {
+  type        = string
+  default     = env("BUILD_ID")
+  description = "Uniqueness suffix for the AMI name/build-id tag (see README.md's \"AMI naming\"), read from the BUILD_ID env var — a CI pipeline's own run identifier, if set. Empty by default, which auto-generates an 8-char random one instead. env() is only valid in a variable default, hence this indirection rather than reading it directly in locals."
+}
+
 variable "region_replicas" {
   type        = list(string)
   default     = []

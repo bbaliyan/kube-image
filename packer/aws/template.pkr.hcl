@@ -20,10 +20,10 @@ locals {
   build_date       = formatdate("YYYY-MM-DD", timestamp())
   k8s_version_safe = replace(var.k8s_version, "+", "-")
   distro_slug      = "almalinux10" # bump alongside the data.amazon-ami filter below
-  # A CI pipeline's own run identifier (env var BUILD_ID) wins when set;
-  # otherwise an 8-char random suffix, so two builds on the same day never
-  # collide — including two manual devcontainer builds run minutes apart.
-  build_suffix = env("BUILD_ID") != "" ? env("BUILD_ID") : substr(uuidv4(), 0, 8)
+  # var.build_id_override (BUILD_ID env var) wins when set; otherwise an
+  # 8-char random suffix, so two builds on the same day never collide —
+  # including two manual devcontainer builds run minutes apart.
+  build_suffix = var.build_id_override != "" ? var.build_id_override : substr(uuidv4(), 0, 8)
   # Identifies one build across every region it's replicated to. See
   # README.md's "Multi-region replication".
   build_id = "${local.build_date}-${local.build_suffix}"
