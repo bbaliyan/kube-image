@@ -4,9 +4,6 @@
 
 aws_region = "us-east-1"
 
-# Required, no default — never 0.0.0.0/0. See README's "Prerequisites".
-security_group_source_cidrs = ["203.0.113.0/24"]
-
 # subnet_id/vpc_id left unset here — defaults to the account's default VPC.
 # If your account has no default VPC, set both:
 # subnet_id = "subnet-0123456789abcdef0"

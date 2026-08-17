@@ -6,11 +6,12 @@
 # entity, must detach all policies first" — harmless to the built AMI, but
 # it leaks the role. Upstream behavior, not fixable here.
 #
-# Only relevant to builds from before this template switched from SSM to
-# direct SSH (it no longer self-provisions any IAM role, so a build today
-# can't create a new orphan). Matches by RoleName prefix "packer-" and the
-# exact description the plugin sets, so it never touches an unrelated role.
-# IAM has no regions, so unlike prune-images.sh this isn't region-scoped.
+# Every real build self-provisions one of these (template.pkr.hcl's
+# temporary_iam_instance_profile_policy_document, for Session Manager
+# access), so run this periodically to sweep up what the race above leaves
+# behind. Matches by RoleName prefix "packer-" and the exact description
+# the plugin sets, so it never touches an unrelated role. IAM has no
+# regions, so unlike prune-images.sh this isn't region-scoped.
 #
 # Usage: ./prune-orphaned-iam.sh [--older-than-minutes N] [--dry-run] [--yes]
 #   --older-than-minutes  Only touch roles created at least this long ago, so

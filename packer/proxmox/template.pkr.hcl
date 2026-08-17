@@ -94,7 +94,8 @@ build {
     # indefinitely. use_proxy=false dials the VM's real IP directly instead,
     # so a plain TCP retry succeeds once it's back up. Requires the build
     # host to reach the VM's IP directly (true here — same LAN as Proxmox).
-    use_proxy = false
+    use_proxy        = false
+    ansible_env_vars = ["ANSIBLE_PIPELINING=True"]
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
       "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",

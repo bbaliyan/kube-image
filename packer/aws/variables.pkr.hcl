@@ -23,11 +23,6 @@ variable "vpc_id" {
   description = "VPC the build instance launches into. Defaults to null, which only works with a default VPC — Packer can't infer vpc_id from subnet_id alone. Find it with: aws ec2 describe-subnets --subnet-ids <subnet_id> --query 'Subnets[0].VpcId' --output text"
 }
 
-variable "security_group_source_cidrs" {
-  type        = list(string)
-  description = "CIDR block(s) allowed inbound SSH to the build instance. No default — 0.0.0.0/0 is never an acceptable fallback for an inbound rule."
-}
-
 variable "ami_architecture" {
   type        = string
   default     = "x86_64"

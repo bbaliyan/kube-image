@@ -102,25 +102,44 @@ source "amazon-ebs" "rke2" {
   run_volume_tags = local.common_tags
 
   ssh_username = var.ssh_username
-  # Direct SSH over the build instance's private IP via a per-build
-  # ephemeral keypair — build-time only, doesn't affect how a real cluster
-  # node is reached afterward (still SSM-only, no inbound 22; CLAUDE.md hard
-  # constraint #6). Switched from ssh_interface = "session_manager" because
-  # tunneling every Ansible round-trip through SSM — and re-establishing
-  # that session after the mid-bake reboot via an AWS API call rather than a
-  # cheap TCP retry — measured ~19min vs ~4min for an equivalent
-  # direct-SSH Proxmox bake. No direct network path to the instance at all?
-  # Set associate_public_ip_address + ssh_interface = "public_ip", or fall
-  # back to ssh_interface = "session_manager" for the slower but portless path.
-  ssh_interface = "private_ip"
-  # No default: the reachable range is consumer-specific and 0.0.0.0/0 is
-  # never an acceptable default for an inbound rule (CLAUDE.md hard
-  # constraint #1). Set in aws.auto.pkrvars.hcl.
-  temporary_security_group_source_cidrs = var.security_group_source_cidrs
+  # Tunnels the build session through AWS Systems Manager Session Manager
+  # instead of a direct connection to port 22 — no inbound security-group
+  # rule needed on the build instance, matching this project's no-SSH-inbound
+  # posture elsewhere (CLAUDE.md hard constraint #6). Slower than a direct
+  # connection: the mid-bake reboot has to re-establish a whole SSM session
+  # (an AWS API call) instead of a cheap TCP retry, measured ~19min vs ~4min
+  # for an equivalent direct-SSH Proxmox bake — accepted in exchange for
+  # never needing a build-host network path to the instance or a
+  # security_group_source_cidrs to configure. Requires the
+  # session-manager-plugin binary on the build host.
+  ssh_interface = "session_manager"
   # AlmaLinux 10's OpenSSH drops the legacy ssh-rsa (SHA-1) signature under
   # RHEL's default crypto-policy — the only RSA scheme Packer's default
   # temporary keypair offers. ed25519 isn't affected.
   temporary_key_pair_type = "ed25519"
+  # Self-provisions a throwaway instance profile scoped to exactly the
+  # Session Manager permissions the build needs, so building doesn't depend
+  # on a pre-existing, account-specific instance profile ARN (an environment
+  # value this public repo can't hardcode). Destroyed automatically at the
+  # end of the build, same lifecycle as the temp keypair. (Can leak on a
+  # packer-plugin-amazon IAM eventual-consistency race — see
+  # prune-orphaned-iam.sh.)
+  temporary_iam_instance_profile_policy_document {
+    Version = "2012-10-17"
+    Statement {
+      Effect = "Allow"
+      Action = [
+        "ssmmessages:CreateControlChannel",
+        "ssmmessages:CreateDataChannel",
+        "ssmmessages:OpenControlChannel",
+        "ssmmessages:OpenDataChannel",
+        "ssm:UpdateInstanceInformation",
+        "ec2messages:GetMessages",
+        "ec2messages:AcknowledgeMessage",
+      ]
+      Resource = ["*"]
+    }
+  }
 }
 
 build {
@@ -130,11 +149,15 @@ build {
   provisioner "ansible" {
     playbook_file = "../../ansible/playbook-aws.yml"
     user          = var.ssh_username
-    # rke2_bake_common's mid-play reboot kills Packer's SSH proxy adapter;
-    # ansible.builtin.reboot's reconnect logic can't recover a dead proxy,
-    # only a real socket. use_proxy = false dials the instance's real IP
-    # directly instead, so a plain TCP retry succeeds once it's back up.
-    use_proxy = false
+    # packer/proxmox/template.pkr.hcl sets use_proxy = false because its
+    # mid-play reboot can dial the VM's real, LAN-reachable IP directly on
+    # reconnect. That fallback doesn't exist here — ssh_interface =
+    # "session_manager" above means there's no direct IP path at all — so
+    # use_proxy stays at its default (true): Packer's own SSH proxy adapter
+    # re-establishes the SSM tunnel after the reboot. See
+    # playbook-aws.yml's bake_reboot_connect_timeout/bake_reboot_post_delay,
+    # tuned up for that reconnect cost.
+    ansible_env_vars = ["ANSIBLE_PIPELINING=True"]
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
       "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",

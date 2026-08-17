@@ -10,6 +10,13 @@
     # CAPI/CAPMOX manifest — overriding the role default here keeps
     # packer/aws/build.sh from having to render (or fake) one.
     bake_stage_capi_manifests: false
+    # Each reconnect over ssh_interface = "session_manager" spins up a whole
+    # new SSM session (an AWS API round-trip), not a cheap TCP retry like
+    # Proxmox's direct-LAN-IP path — rke2_bake_common's defaults retry too
+    # fast for that and mostly burn time on doomed attempts before the SSM
+    # Agent is back up post-reboot.
+    bake_reboot_connect_timeout: 15
+    bake_reboot_post_delay: 30
   roles:
     - rke2_bake_common
     - rke2_bake_aws

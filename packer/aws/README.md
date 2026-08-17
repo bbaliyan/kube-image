@@ -14,18 +14,23 @@ step needed, unlike Proxmox.
   here — it infers the provider from a selected cluster in a `kube-compute`
   consumer repo's `live/<provider>/...` path, and this repo has no cluster
   to select.
-- The build host must reach the build instance's private IP on port 22
-  directly (Packer connects via a per-build ephemeral keypair and a
-  temporary security group scoped to `var.security_group_source_cidrs`,
-  required, never `0.0.0.0/0`). This is build-time only — it doesn't change
-  how a real cluster node is reached at runtime (still SSM-only, no inbound
-  port 22; see "amazon-ssm-agent" below and CLAUDE.md hard constraint #6).
-  No direct network path to the build instance at all? Set
-  `ssh_interface = "session_manager"` in `template.pkr.hcl` instead — no
-  inbound port needed, at the cost of a slower build (~19min vs ~4min,
-  measured against an equivalent direct-SSH Proxmox bake, mostly from SSM
-  session round-trips and having to re-establish the session after the
-  mid-bake reboot).
+- The [Session Manager plugin for the AWS CLI](https://docs.aws.amazon.com/systems-manager/latest/userguide/session-manager-working-with-install-plugin.html)
+  installed on the build host — the Ansible provisioner connects to the
+  build instance over AWS Systems Manager Session Manager
+  (`ssh_interface = "session_manager"` in `template.pkr.hcl`), not a direct
+  connection to port 22. This means the build instance needs no inbound
+  security-group rule at all, matching this project's no-SSH-inbound
+  posture elsewhere; the IAM permissions Session Manager itself needs are
+  self-provisioned per build (see `template.pkr.hcl`'s
+  `temporary_iam_instance_profile_policy_document` — no pre-existing
+  instance profile required). Slower than a direct connection would be
+  (~19min vs ~4min, measured against an equivalent direct-SSH Proxmox bake,
+  mostly from SSM session round-trips and re-establishing the session after
+  the mid-bake reboot) — accepted in exchange for no network-path or
+  security-group-CIDR requirement on the build host. Need a faster build and
+  have a direct network path to the instance instead? Set
+  `ssh_interface = "private_ip"` (or `"public_ip"` with
+  `associate_public_ip_address = true`) in `template.pkr.hcl`.
 - `aws` CLI, `helm`, and `python3` with `PyYAML` on the build host.
 
 ## Building
@@ -36,8 +41,8 @@ directory, not the repo root.
 
 ```bash
 cp aws.auto.pkrvars.hcl.example aws.auto.pkrvars.hcl
-# edit aws.auto.pkrvars.hcl: aws_region, security_group_source_cidrs, and
-# subnet_id if your account needs a non-default value
+# edit aws.auto.pkrvars.hcl: aws_region, and subnet_id/vpc_id if your
+# account needs a non-default value
 packer init .
 ./build.sh .
 ```
@@ -190,9 +195,11 @@ at a time, so pruning x86_64 builds can never delete your only arm64 AMI:
 ```
 
 Separately, `prune-orphaned-iam.sh` sweeps up temporary IAM roles that a
-failed Packer cleanup left behind, from the era before this template
-stopped self-provisioning IAM roles (see `prune-orphaned-iam.sh`'s own
-header for why the leaks happened). Not region-scoped, since IAM isn't:
+failed Packer cleanup left behind — every build self-provisions one (see
+`template.pkr.hcl`'s `temporary_iam_instance_profile_policy_document`), and
+packer-plugin-amazon intermittently fails to delete its own temp role due to
+an IAM eventual-consistency race (see `prune-orphaned-iam.sh`'s own header).
+Not region-scoped, since IAM isn't:
 
 ```bash
 ./prune-orphaned-iam.sh --dry-run   # see what would be deleted
