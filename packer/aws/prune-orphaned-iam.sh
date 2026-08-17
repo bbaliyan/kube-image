@@ -1,10 +1,17 @@
 #!/usr/bin/env bash
 # Deletes orphaned temporary IAM roles/instance profiles left behind by a
-# failed Packer cleanup. packer-plugin-amazon deletes its temp role's inline
-# policy and the role itself back-to-back with no wait for IAM's eventual
-# consistency, so the delete intermittently fails with "Cannot delete
-# entity, must detach all policies first" — harmless to the built AMI, but
-# it leaks the role. Upstream behavior, not fixable here.
+# failed Packer cleanup. Two independent causes leave the role's DeleteRole
+# failing with "Cannot delete entity, must detach all policies first":
+#   1. packer-plugin-amazon deletes its own inline policy and the role
+#      back-to-back with no wait for IAM's eventual consistency — transient,
+#      clears itself within seconds. Upstream behavior, not fixable here.
+#   2. Some AWS accounts auto-attach managed policies (e.g.
+#      AmazonSSMManagedInstanceCore) to any role trustable by
+#      ec2.amazonaws.com, for fleet/patch-compliance visibility — permanent,
+#      not eventual consistency, since nothing ever detaches them. Packer's
+#      own cleanup only ever removes what it itself attached (one inline
+#      policy) and has no idea these exist, so DeleteRole fails forever
+#      without this script explicitly detaching them first.
 #
 # Every real build self-provisions one of these (template.pkr.hcl's
 # temporary_iam_instance_profile_policy_document, for Session Manager
@@ -112,13 +119,27 @@ FAILED_LIST=()
 for role_name in "${DELETE_LIST[@]}"; do
   echo "Cleaning up ${role_name}..."
 
+  # --output text on a list of scalars tab-separates them onto one line
+  # rather than one per line — tr splits that onto separate lines first so
+  # mapfile gives one array element per policy, not one element containing
+  # every policy glued together (silently broken whenever a role has more
+  # than one of either kind, e.g. this account's two attached SSM policies).
   mapfile -t inline_policies < <(
-    aws iam list-role-policies --role-name "$role_name" --query 'PolicyNames' --output text
+    aws iam list-role-policies --role-name "$role_name" --query 'PolicyNames' --output text | tr '\t' '\n'
   )
   for policy_name in "${inline_policies[@]}"; do
     [ -z "$policy_name" ] && continue
     echo "  Removing inline policy ${policy_name}..."
     aws iam delete-role-policy --role-name "$role_name" --policy-name "$policy_name"
+  done
+
+  mapfile -t attached_policy_arns < <(
+    aws iam list-attached-role-policies --role-name "$role_name" --query 'AttachedPolicies[].PolicyArn' --output text | tr '\t' '\n'
+  )
+  for policy_arn in "${attached_policy_arns[@]}"; do
+    [ -z "$policy_arn" ] && continue
+    echo "  Detaching managed policy ${policy_arn}..."
+    aws iam detach-role-policy --role-name "$role_name" --policy-arn "$policy_arn"
   done
 
   # The plugin names the instance profile identically to the role.
