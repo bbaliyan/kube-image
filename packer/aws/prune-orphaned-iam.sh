@@ -88,6 +88,24 @@ if [ "$ASSUME_YES" != true ]; then
   }
 fi
 
+# delete-role right after delete-role-policy hits the same IAM
+# eventual-consistency race packer-plugin-amazon does (see header) — a few
+# retries with a short sleep clears it within seconds. Not wrapped in `set
+# -e`-triggering failure: one role stuck past the retry budget shouldn't
+# abort the rest of the list, so failures are collected and reported at the
+# end instead.
+delete_role_with_retry() {
+  local role_name="$1" attempt
+  for attempt in 1 2 3 4 5; do
+    if aws iam delete-role --role-name "$role_name" 2>/dev/null; then
+      return 0
+    fi
+    [ "$attempt" -eq 5 ] && return 1
+    sleep 5
+  done
+}
+
+FAILED_LIST=()
 for role_name in "${DELETE_LIST[@]}"; do
   echo "Cleaning up ${role_name}..."
 
@@ -110,7 +128,17 @@ for role_name in "${DELETE_LIST[@]}"; do
   fi
 
   echo "  Deleting role ${role_name}..."
-  aws iam delete-role --role-name "$role_name"
+  if ! delete_role_with_retry "$role_name"; then
+    echo "  Failed to delete role ${role_name} after retries — leaving it for the next run." >&2
+    FAILED_LIST+=("$role_name")
+  fi
 done
+
+if [ "${#FAILED_LIST[@]}" -gt 0 ]; then
+  echo
+  echo "Done, but ${#FAILED_LIST[@]} role(s) could not be deleted (will be picked up by a later run):"
+  printf '  %s\n' "${FAILED_LIST[@]}"
+  exit 1
+fi
 
 echo "Done."
