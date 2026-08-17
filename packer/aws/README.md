@@ -46,7 +46,7 @@ This builds an x86_64 AMI (`ami_architecture`/`instance_type`'s defaults).
 For arm64, override both as `PKR_VAR_*` env vars, not `-var`/`-var-file`
 flags — `build.sh` forwards command-line args to `packer init` too, which
 doesn't accept `-var`. `ami_architecture` alone isn't enough either, since
-the default `instance_type` (`t3.medium`) can't launch an arm64 AMI:
+the default `instance_type` (`c8i.large`, x86_64-only) can't launch an arm64 AMI:
 
 ```bash
 PKR_VAR_ami_architecture=arm64 PKR_VAR_instance_type=m7g.medium ./build.sh .

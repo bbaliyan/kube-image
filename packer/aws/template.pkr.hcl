@@ -76,6 +76,19 @@ source "amazon-ebs" "rke2" {
   vpc_id        = var.vpc_id
   source_ami    = data.amazon-ami.almalinux10.id
 
+  # gp3 over the AMI's default gp2 — gp3's baseline 3,000 IOPS/125 MiB/s is
+  # available immediately (no gp2 burst-bucket ramp-up), which matters here
+  # since 'dnf update -y' is disk-write-heavy across many small RPM
+  # transactions. device_name assumes AlmaLinux's published AMI roots at
+  # /dev/sda1, standard for RHEL-family cloud images — if a build ever fails
+  # here with a device-name mismatch, confirm via
+  # `aws ec2 describe-images --image-ids <ami-id> --query 'Images[0].RootDeviceName'`.
+  launch_block_device_mappings {
+    device_name           = "/dev/sda1"
+    volume_type           = "gp3"
+    delete_on_termination = true
+  }
+
   ami_name        = local.image_name
   ami_description = "RKE2 ${var.k8s_version} / Cilium ${var.cilium_version} / Argo CD ${var.argocd_version}, baked ${local.build_date} from ${data.amazon-ami.almalinux10.id}"
   tags            = local.common_tags

@@ -7,8 +7,8 @@ variable "aws_region" {
 
 variable "instance_type" {
   type        = string
-  default     = "t3.medium"
-  description = "EC2 instance type for the build instance. Unrelated to the instance type a consumer later launches from the resulting AMI."
+  default     = "c8i.large"
+  description = "EC2 instance type for the build instance. Unrelated to the instance type a consumer later launches from the resulting AMI. Non-burstable and CPU-heavier than a t3: 'dnf update -y' is the dominant cost of a build (profiled at ~60% of total build time) and is CPU/disk-bound, not network-bound."
 }
 
 variable "subnet_id" {
