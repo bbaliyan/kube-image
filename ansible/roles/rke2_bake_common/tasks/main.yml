@@ -55,14 +55,7 @@
   ansible.builtin.shell:
     cmd: |
       set -euo pipefail
-      # iscsi-initiator-utils provides iscsiadm and /etc/iscsi — required by
-      # any iSCSI-backed CSI driver (e.g. democratic-csi's freenas-api-iscsi)
-      # regardless of provider; without it the CSI node plugin's hostPath
-      # mount of /etc/iscsi fails outright (confirmed on a real cluster-media
-      # apply: the node pod stuck in ContainerCreating with "hostPath type
-      # check failed: /etc/iscsi is not a directory").
-      dnf install -y ca-certificates curl kernel-modules-extra-matched iscsi-initiator-utils
-      systemctl enable --now iscsid
+      dnf install -y ca-certificates curl kernel-modules-extra-matched
       # AlmaLinux 10's minimal image ships only kernel-modules-core, which
       # excludes nft_compat (the iptables-nft translation shim). Cilium's
       # default VXLAN mode needs it — without it, Cilium's iptables
