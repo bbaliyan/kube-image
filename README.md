@@ -7,6 +7,32 @@ bootstrapping from scratch on every apply. Per-cluster identity, secrets, and
 join logic stay a launch-time concern (`kube-compute`'s `node-bootstrap`
 module), not baked here.
 
+## The bootstrap program is baked, and pinned
+
+`rke2_bake_common` installs `kube-compute`'s node bootstrap program at
+`/opt/kube-compute/bootstrap.sh`, from the commit pinned in that role's
+`defaults/main.yml`. It is a plain program: `kube-compute`'s `node-bootstrap`
+module writes only values, in `/opt/kube-compute/node.env`.
+
+It is baked for the same reason the Cilium and Argo CD renders are. The program
+is ~9.6 KB and almost entirely static, and it used to be rendered per node and
+delivered in cloud-init -- a genesis node carried three copies, its own plus one
+inside each worker group's cloud-init in a CAPI bundle. EC2 allows 16384 decoded
+bytes of user data for everything a node boots with, and a real two-group
+cluster reached 24627. Proxmox's snippet cap is 1 MiB, which is the same problem
+with more room.
+
+The two sides agree on a contract number, in the program and in the module. A
+mismatch fails the node's first boot with a message naming both, so **bump the
+pin when that program changes**. The bake prints the ref and the contract it
+installed, so a boot failure traces back to a build.
+
+`trusted_ca_path` optionally bakes a corporate CA into the trust store, at the
+one path `kube-compute` pins containerd's TLS to. The PEM is never committed
+here -- it is a path on the build host. It saves the same kind of duplication:
+a CA otherwise travels in every node's user data and again inside every worker
+group's cloud-init. Set `trusted_ca_in_image = true` in `kube-compute` to match.
+
 A provider-agnostic `rke2_bake_common` Ansible role handles OS prep, RKE2
 install, and template cleanup. Each provider adds a thin
 `rke2_bake_<provider>` role for whatever's genuinely provider-specific (e.g.

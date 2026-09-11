@@ -100,6 +100,7 @@ build {
       "--extra-vars", "k8s_version=${var.k8s_version}",
       "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",
       "--extra-vars", "rendered_capi_manifests_dir=${var.rendered_capi_manifests_dir}",
+      "--extra-vars", "trusted_ca_path=${var.trusted_ca_path}",
     ]
   }
 }

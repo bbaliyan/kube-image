@@ -78,3 +78,9 @@ variable "rendered_manifests_dir" {
   type        = string
   description = "Directory containing the pre-rendered cilium.yaml/00-argocd.yaml to copy onto the AMI. Always set by build.sh — no default, so a bare 'packer build' fails loudly instead of baking a stale manifest."
 }
+
+variable "trusted_ca_path" {
+  type        = string
+  default     = ""
+  description = "Optional path ON THE BUILD HOST to a corporate CA PEM to bake into the image's trust store, at /etc/pki/ca-trust/source/anchors/trusted-ca.crt -- the one path kube-compute pins containerd's TLS to. Never a path inside this repo: nothing corporate is committed here. Empty (the default) bakes none, and the PEM then travels in every node's user data instead, once per node and again inside every worker group's cloud-init in a CAPI bundle. When set, tell kube-compute with trusted_ca_in_image = true."
+}

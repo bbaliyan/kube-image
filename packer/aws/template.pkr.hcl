@@ -162,6 +162,7 @@ build {
       "--extra-vars", "k8s_version=${var.k8s_version}",
       "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",
       "--extra-vars", "aws_region=${var.aws_region}", # rke2_bake_aws needs it for the ssm-agent RPM URL
+      "--extra-vars", "trusted_ca_path=${var.trusted_ca_path}",
     ]
   }
 }
