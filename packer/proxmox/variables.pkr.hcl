@@ -93,5 +93,5 @@ variable "capmox_version" {
 variable "trusted_ca_path" {
   type        = string
   default     = ""
-  description = "Optional path ON THE BUILD HOST to a corporate CA PEM to bake into the image's trust store, at /etc/pki/ca-trust/source/anchors/trusted-ca.crt -- the one path kube-compute pins containerd's TLS to. Never a path inside this repo: nothing corporate is committed here. Empty (the default) bakes none, and the PEM then travels in every node's user data instead, once per node and again inside every worker group's cloud-init in a CAPI bundle. When set, tell kube-compute with trusted_ca_in_image = true."
+  description = "Optional path on the build host to a CA certificate baked into the trust store at /etc/pki/ca-trust/source/anchors/trusted-ca.crt. Set trusted_ca_in_image = true in kube-compute for nodes booting the image."
 }

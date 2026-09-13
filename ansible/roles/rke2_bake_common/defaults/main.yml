@@ -22,15 +22,9 @@ bake_stage_capi_manifests: true
 bake_reboot_connect_timeout: 5
 bake_reboot_post_delay: 0
 
-# Where the node bootstrap program comes from. Pinned to a kube-compute commit:
-# a bake must be reproducible, and a commit sha pins content. Bump it when that
-# program changes; the contract number inside it is what makes a mismatched pair
-# fail loudly on the node rather than silently.
+# Where the node bootstrap program comes from. Bump the ref when it changes.
 kube_compute_raw_base: "https://raw.githubusercontent.com/bbaliyan/kube-compute"
-kube_compute_ref: "f68d721e7d7323909e803cdbe0ceac6cbb746836"
+kube_compute_ref: "a9aaf1bdb848b1f8f1e47745d6420c7b59245256"
 
-# Optional path on the BUILD HOST to a corporate CA PEM to bake into the image's
-# trust store, at the one path kube-compute pins containerd's TLS to. Empty (the
-# default) bakes none, and the PEM then travels in every node's user data
-# instead. Never a path inside this repo -- nothing corporate is committed here.
+# Optional CA certificate on the build host, baked into the trust store.
 trusted_ca_path: ""

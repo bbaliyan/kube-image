@@ -188,22 +188,6 @@
     group: root
   tags: [bootstrap]
 
-# The runtime half of the RKE2 bootstrap, baked rather than delivered. It used
-# to be rendered per node by kube-compute's node-bootstrap module and shipped in
-# cloud-init, which cost ~9.6 KB of a genesis node's user data and ~9.6 KB again
-# inside every worker group's cloud-init in a CAPI bundle. EC2 allows 16384
-# decoded bytes for everything a node boots with, and three copies did not fit.
-# Baking it is what this role already does with the Cilium and Argo CD renders,
-# for the same reason on Proxmox, whose snippet cap is 1 MiB.
-#
-# The module now writes only values, in /opt/kube-compute/node.env, and the
-# program refuses to run against a node.env written for a different contract
-# number. So a stale ref here fails a node's first boot with a message naming
-# both sides, rather than configuring it half-way.
-#
-# Pinned to a commit, which is itself a content pin: no second checksum to keep
-# in step, and `git show <ref>:modules/node-bootstrap/files/bootstrap.sh` is the
-# whole audit trail.
 - name: bootstrap | install kube-compute's node bootstrap program
   ansible.builtin.get_url:
     url: "{{ kube_compute_raw_base }}/{{ kube_compute_ref }}/modules/node-bootstrap/files/bootstrap.sh"
@@ -218,33 +202,12 @@
   until: bootstrap_program is succeeded
   tags: [bootstrap]
 
-# Cheap, and the only chance to catch a truncated or HTML-error-page download
-# before a node tries to boot from it.
-- name: bootstrap | syntax-check the program that will boot every node
+- name: bootstrap | syntax-check the node bootstrap program
   ansible.builtin.command: bash -n /opt/kube-compute/bootstrap.sh
   changed_when: false
   tags: [bootstrap]
 
-- name: bootstrap | report which bootstrap contract this image bakes
-  ansible.builtin.command: grep -m1 '^BOOTSTRAP_CONTRACT=' /opt/kube-compute/bootstrap.sh
-  register: bootstrap_contract
-  changed_when: false
-  tags: [bootstrap]
-
-- name: bootstrap | show it, so a failed boot can be traced to a bake
-  ansible.builtin.debug:
-    msg: "kube-compute ref {{ kube_compute_ref }}, {{ bootstrap_contract.stdout }}"
-  tags: [bootstrap]
-
-# Optional, and the PEM is never committed to this repo: point trusted_ca_path
-# at a file on the build host. A corporate CA is org-wide static content, so it
-# belongs here for the same reason the program does -- it otherwise travels in
-# every node's user data and again inside every worker group's cloud-init, four
-# copies on a two-group cluster. The path must be exactly this one: it is where
-# kube-compute's registries.yaml pins containerd's TLS, and the bootstrap
-# program fails the boot if the file is missing. Tell the module about it with
-# trusted_ca_in_image = true.
-- name: bootstrap | install the corporate trust anchor (optional)
+- name: bootstrap | install the CA certificate
   ansible.builtin.copy:
     src: "{{ trusted_ca_path }}"
     dest: /etc/pki/ca-trust/source/anchors/trusted-ca.crt
