@@ -29,6 +29,33 @@
     creates: /usr/bin/amazon-ssm-agent
   changed_when: true
 
+# kube-compute's AWS workers fetch their join token from SSM with the AWS CLI.
+- name: aws | install unzip for the AWS CLI installer
+  ansible.builtin.dnf:
+    name: unzip
+    state: present
+
+- name: aws | download and unpack the AWS CLI
+  ansible.builtin.unarchive:
+    src: "https://awscli.amazonaws.com/awscli-exe-linux-{{ ansible_architecture }}.zip"
+    dest: /tmp
+    remote_src: true
+    creates: /usr/local/bin/aws
+  register: awscli_download
+  retries: 3
+  delay: 10
+  until: awscli_download is succeeded
+
+- name: aws | install the AWS CLI
+  ansible.builtin.command: /tmp/aws/install
+  args:
+    creates: /usr/local/bin/aws
+
+- name: aws | remove the AWS CLI installer
+  ansible.builtin.file:
+    path: /tmp/aws
+    state: absent
+
 # Not started here — aws-control-plane/aws-node-pool's launch-time
 # `systemctl enable --now amazon-ssm-agent` already does that on every real
 # boot, and template-prep below resets machine-id/cloud-init state anyway.

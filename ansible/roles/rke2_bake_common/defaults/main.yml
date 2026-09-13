@@ -27,7 +27,7 @@ bake_reboot_post_delay: 0
 # program changes; the contract number inside it is what makes a mismatched pair
 # fail loudly on the node rather than silently.
 kube_compute_raw_base: "https://raw.githubusercontent.com/bbaliyan/kube-compute"
-kube_compute_ref: "a42efc340154e8d73ba22f42600c5af78969fc27"
+kube_compute_ref: "f68d721e7d7323909e803cdbe0ceac6cbb746836"
 
 # Optional path on the BUILD HOST to a corporate CA PEM to bake into the image's
 # trust store, at the one path kube-compute pins containerd's TLS to. Empty (the
