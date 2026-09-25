@@ -14,7 +14,7 @@
   // Windows/WSL2 machine.
   //
   // renovate: datasource=docker depName=ghcr.io/bbaliyan/kube-devenv
-  "image": "ghcr.io/bbaliyan/kube-devenv:0.8.2",
+  "image": "ghcr.io/bbaliyan/kube-devenv:0.8.17",
   "name": "kube-image",
 
   "initializeCommand": [".devcontainer/initialize"],
