@@ -8,6 +8,9 @@
 kubeProxyReplacement: true
 k8sServiceHost: "127.0.0.1"
 k8sServicePort: 6443
+# Also adds the ConfigMap checksum to the agents' pod template, which
+# cilium-app.yaml sets; without it here, adoption alone would restart them.
+rollOutCiliumPods: true
 # Node IPAM LB is the platform's LoadBalancer mechanism on every provider: it
 # advertises the node's own (LAN- or VPC-routable) IP into a LoadBalancer
 # Service, with the eBPF datapath forwarding to pods — no ARP, BGP, cloud
@@ -16,6 +19,20 @@ k8sServicePort: 6443
 nodeIPAM:
   enabled: true
 defaultLBServiceIPAM: nodeipam
+# Equal to kube-platform's bootstrap/templates/cilium-app.yaml, so Argo CD
+# adopting this install restarts nothing (checked by rendering both for a
+# cluster without Hubble; with Hubble the agents restart once). Requests
+# only on the agent and Envoy: a memory limit would let the kernel kill a
+# node's datapath.
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+envoy:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
 operator:
   # Matches kube-platform's cilium-app.yaml default: a single-node cluster
   # is this project's current primary target, and cilium-operator's chart
@@ -28,6 +45,12 @@ operator:
   replicas: 1
   tolerations:
     - operator: Exists
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 512Mi
 ipam:
   operator:
     clusterPoolIPv4PodCIDRList: ["10.42.0.0/16"]
