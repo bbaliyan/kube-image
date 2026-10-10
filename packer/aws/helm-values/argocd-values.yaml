@@ -8,6 +8,13 @@
 # bootstrap/templates/argocd-app.yaml carries the consumer's chosen ongoing
 # version afterward.
 configs:
+  # How often Applications are compared, and how soon a failed comparison
+  # is retried. On a new cluster, Applications wait on each other's CRDs and
+  # credentials, and the default two minutes was most of the bring-up time.
+  # Equal to kube-platform's bootstrap/templates/argocd-app.yaml.
+  cm:
+    timeout.reconciliation: 30s
+    timeout.reconciliation.jitter: 10s
   params:
     # Deliberate: TLS terminates upstream (ingress / load balancer); Argo CD serves plain HTTP behind it.
     server.insecure: "true"
