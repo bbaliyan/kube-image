@@ -22,13 +22,15 @@ configs:
 # (BestEffort QoS) and a 1s probe timeoutSeconds upstream — cheap insurance
 # against a repo-server/controller crash loop under scheduling jitter on a
 # small box.
+# No CPU limits, like kube-platform's argocd-app.yaml: they only throttle
+# manifest generation, and set here they would outlive Argo CD adopting
+# this install (another field manager owns them).
 repoServer:
   resources:
     requests:
       cpu: 100m
       memory: 128Mi
     limits:
-      cpu: 500m
       memory: 512Mi
   readinessProbe:
     timeoutSeconds: 5
@@ -42,7 +44,6 @@ controller:
       cpu: 250m
       memory: 256Mi
     limits:
-      cpu: 1000m
       memory: 1Gi
   readinessProbe:
     timeoutSeconds: 5
