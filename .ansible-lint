@@ -1,0 +1,7 @@
+# Bake roles run once per image build on a fresh host, and their task names
+# use a "phase | action" convention. Skip the rules that conflict with that.
+skip_list:
+  - name[casing]
+  - var-naming[no-role-prefix]
+  - no-changed-when
+  - no-handler
