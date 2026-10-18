@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Fast subset of make test-commit: format and secret scan.
+# Enable with: make hooks
+set -euo pipefail
+exec make test-fast

@@ -71,3 +71,14 @@ cd ../../ansible
 ansible-playbook --syntax-check -i localhost, playbook-proxmox.yml
 ansible-playbook --syntax-check -i localhost, playbook-aws.yml
 ```
+
+## Checks
+
+Run the commit checks inside the `kube-devenv` image:
+
+```bash
+make test-commit
+```
+
+They need no cloud access or secrets. `make hooks` turns on a pre-commit hook
+that runs the fast subset (`make test-fast`).
