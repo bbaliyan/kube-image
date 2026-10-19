@@ -1,6 +1,6 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Automerge: grouped patch PRs merge once the required commit check passes (ruleset). Minor and major updates are reviewed by hand.",
+  "description": "Automerge: grouped patch PRs and minor PRs merge once the required commit check passes (ruleset). Merging only changes main; images are built when the operator runs the build. Major updates are reviewed by hand.",
   "extends": [
     "local>bbaliyan/renovate-config"
   ],
