@@ -6,6 +6,7 @@ has its own directory.
 | Directory | Image |
 |---|---|
 | `kube-node/` | RKE2 node image for `kube-compute`. Documented below. |
+| `kube-devbox/` | Dev box image: a disposable VM for development and validation. See `kube-devbox/README.md`. |
 
 The commit tier, Renovate config and `make test-commit` live at the root and
 cover every directory.

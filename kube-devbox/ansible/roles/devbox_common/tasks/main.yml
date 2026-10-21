@@ -1,0 +1,9 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Verify | the base image is the expected distribution
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["distribution"] == devbox_expected_distribution
+      - ansible_facts["distribution_major_version"] == devbox_expected_major_version
+    fail_msg: "The dev box image builds on AlmaLinux 10 only."
+    success_msg: "Base image is AlmaLinux 10."
