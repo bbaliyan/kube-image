@@ -122,7 +122,7 @@ swallows failure silently.
 
 Unlike the Proxmox template, this AMI does not stage a CAPI/CAPMOX install
 manifest — AWS's node pool comes back as a fixed-size ASG, with no
-cluster-autoscaler integration yet (`ansible/playbook-aws.yml` sets
+cluster-autoscaler integration yet (`kube-node/ansible/playbook-aws.yml` sets
 `bake_stage_capi_manifests: false`).
 
 ## AMI naming

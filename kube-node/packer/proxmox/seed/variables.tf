@@ -10,7 +10,7 @@ variable "proxmox_node" {
 }
 
 variable "cpu_type" {
-  description = "QEMU CPU model for the seed VM. Defaults to 'host' — see packer/proxmox/template.pkr.hcl's cpu_type for why. This VM never boots (started=false below); kept consistent for anyone booting the seed directly to validate."
+  description = "QEMU CPU model for the seed VM. Defaults to 'host' — see kube-node/packer/proxmox/template.pkr.hcl's cpu_type for why. This VM never boots (started=false below); kept consistent for anyone booting the seed directly to validate."
   type        = string
   default     = "host"
 }
@@ -80,13 +80,13 @@ variable "network_bridge" {
 }
 
 variable "ssh_username" {
-  description = "Cloud-init user baked into the seed template. Must match packer/proxmox/variables.pkr.hcl's ssh_username."
+  description = "Cloud-init user baked into the seed template. Must match kube-node/packer/proxmox/variables.pkr.hcl's ssh_username."
   type        = string
   default     = "almalinux"
 }
 
 variable "ssh_public_key_path" {
-  description = "Path to the SSH public key authorized for ssh_username. Must correspond to the private key packer/proxmox/variables.pkr.hcl's ssh_private_key_file points at."
+  description = "Path to the SSH public key authorized for ssh_username. Must correspond to the private key kube-node/packer/proxmox/variables.pkr.hcl's ssh_private_key_file points at."
   type        = string
   default     = "~/.ssh/id_ed25519_kube_cluster.pub"
 }

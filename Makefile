@@ -10,7 +10,7 @@ SHELL := bash
 
 CHECKS    ?= /usr/share/kube-devenv/checks
 PROVIDERS := aws proxmox
-SCRIPTS   := $(wildcard packer/*/*.sh) $(wildcard .devcontainer/*.sh) .githooks/pre-commit
+SCRIPTS   := $(wildcard kube-node/packer/*/*.sh) $(wildcard .devcontainer/*.sh) .githooks/pre-commit
 BASE_REF  ?= $(shell git rev-parse --verify --quiet origin/main)
 
 # This repo has no DCO, so commits need no Signed-off-by line.
@@ -27,8 +27,8 @@ hooks:
 	git config core.hooksPath .githooks
 
 fmt:
-	packer fmt -check -recursive packer tests
-	tofu fmt -check -recursive packer/proxmox/seed
+	packer fmt -check -recursive kube-node/packer kube-node/tests
+	tofu fmt -check -recursive kube-node/packer/proxmox/seed
 
 lint-scripts:
 	bash -n $(SCRIPTS)
@@ -38,7 +38,7 @@ lint-yaml:
 	yamllint --strict .
 
 lint-ansible:
-	ansible-lint ansible/
+	ansible-lint kube-node/ansible/
 
 lint-pipelines:
 	$(CHECKS)/pipeline-lint.sh .
@@ -47,16 +47,16 @@ lint-pipelines:
 validate: $(addprefix validate-packer-,$(PROVIDERS)) validate-seed
 
 validate-packer-aws:
-	cd packer/aws && packer init . && packer validate -var-file=$(CURDIR)/tests/aws.pkrvars.hcl .
+	cd kube-node/packer/aws && packer init . && packer validate -var-file=$(CURDIR)/kube-node/tests/aws.pkrvars.hcl .
 
 # Packer reads the key file at validate time, so give it a throwaway one.
 validate-packer-proxmox:
 	rm -f /tmp/validate-key /tmp/validate-key.pub
 	ssh-keygen -q -t ed25519 -N '' -f /tmp/validate-key
-	cd packer/proxmox && packer init . && packer validate 		-var-file=$(CURDIR)/tests/proxmox.pkrvars.hcl -var ssh_private_key_file=/tmp/validate-key .
+	cd kube-node/packer/proxmox && packer init . && packer validate 		-var-file=$(CURDIR)/kube-node/tests/proxmox.pkrvars.hcl -var ssh_private_key_file=/tmp/validate-key .
 
 validate-seed:
-	rm -rf /tmp/validate-seed && cp -r packer/proxmox/seed /tmp/validate-seed
+	rm -rf /tmp/validate-seed && cp -r kube-node/packer/proxmox/seed /tmp/validate-seed
 	cd /tmp/validate-seed && tofu init -backend=false -input=false && tofu validate
 
 secrets:

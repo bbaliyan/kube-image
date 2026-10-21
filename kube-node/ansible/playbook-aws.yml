@@ -8,7 +8,7 @@
     # AWS's node pool comes back as a fixed-size ASG with no
     # cluster-autoscaler integration yet, so this image never needs the
     # CAPI/CAPMOX manifest — overriding the role default here keeps
-    # packer/aws/build.sh from having to render (or fake) one.
+    # kube-node/packer/aws/build.sh from having to render (or fake) one.
     bake_stage_capi_manifests: false
     # Each reconnect over ssh_interface = "session_manager" spins up a whole
     # new SSM session (an AWS API round-trip), not a cheap TCP retry like

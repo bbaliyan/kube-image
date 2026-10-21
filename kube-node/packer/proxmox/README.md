@@ -5,9 +5,9 @@ AlmaLinux 10 template.
 
 ## One-time setup: create the seed template
 
-kube-image clones from an existing AlmaLinux 10 Proxmox template rather than
+kube-images clones from an existing AlmaLinux 10 Proxmox template rather than
 installing from ISO. Create it once per Proxmox cluster with the automated
-`seed/` OpenTofu config (`packer/proxmox/seed/`) — no manual Proxmox UI or
+`seed/` OpenTofu config (`kube-node/packer/proxmox/seed/`) — no manual Proxmox UI or
 `qm` commands. Every subsequent `packer build` clones from the same seed.
 
 Proxmox API credentials come from `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN`
