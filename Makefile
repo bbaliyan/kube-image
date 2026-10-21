@@ -55,7 +55,7 @@ validate-packer-proxmox:
 	ssh-keygen -q -t ed25519 -N '' -f /tmp/validate-key
 	cd kube-node/packer/proxmox && packer init . && packer validate 		-var-file=$(CURDIR)/kube-node/tests/proxmox.pkrvars.hcl -var ssh_private_key_file=/tmp/validate-key .
 
-# The dev box template needs no cloud access either. It reads the same throwaway key.
+# The dev box template needs no cloud access either. It makes its own throwaway key.
 validate-devbox:
 	rm -f /tmp/validate-devbox-key /tmp/validate-devbox-key.pub
 	ssh-keygen -q -t ed25519 -N '' -f /tmp/validate-devbox-key

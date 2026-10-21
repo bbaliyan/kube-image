@@ -33,7 +33,7 @@ variable "disk_datastore_id" {
 
 variable "network_bridge" {
   type        = string
-  description = "Bridge the build VM attaches to. It must reach the build host directly."
+  description = "Bridge the build VM attaches to. The build VM must reach the template VM's address."
 }
 
 variable "proxmox_insecure_skip_tls_verify" {
@@ -62,6 +62,6 @@ variable "ssh_username" {
 
 variable "ssh_private_key_file" {
   type        = string
-  default     = "~/.ssh/id_ed25519_kube_cluster"
+  default     = "~/.ssh/id_ed25519_kube_devbox"
   description = "SSH private key path. Its public half must be in the cloud-init keys of the seed template."
 }

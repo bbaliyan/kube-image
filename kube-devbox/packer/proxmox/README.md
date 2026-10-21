@@ -6,12 +6,13 @@ This template clones the stock AlmaLinux 10 seed template and runs the shared
 
 ## Build
 
-1. Copy `proxmox.auto.pkrvars.hcl.example` to `proxmox.auto.pkrvars.hcl`.
-2. Set the Proxmox URL, the API token and the site values in that file.
-3. Run `packer init .`
-4. Run `packer build .`
+1. Verify that the seed template exists. The build clones it.
+2. Copy `proxmox.auto.pkrvars.hcl.example` to `proxmox.auto.pkrvars.hcl`.
+3. Set the Proxmox URL, the API token and the site values in that file.
+4. Run `packer init .`.
+5. Run `packer build .`.
 
-The build VM must reach the template VM's address directly. The bridge name is an input.
+The build VM must reach the template VM's address. The bridge name is an input.
 
 ## Notes
 
