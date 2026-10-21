@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: Apache-2.0
 # Genesis Cilium values — rendered into the baked AMI's
 # /opt/kube-compute/manifests/cilium.yaml via `helm template` at build time.
-# Deliberate duplicate of packer/proxmox/helm-values/cilium-values.yaml
+# Deliberate duplicate of kube-node/packer/proxmox/helm-values/cilium-values.yaml
 # (each provider's Packer template is self-contained) — keep both in sync by
 # hand, and in sync with kube-platform's bootstrap/templates/cilium-app.yaml,
 # authoritative once Argo CD adopts this genesis install.

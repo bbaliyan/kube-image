@@ -1,7 +1,7 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 # Proxmox-only bake tasks, included alongside rke2_bake_common by
-# ansible/playbook-proxmox.yml.
+# kube-node/ansible/playbook-proxmox.yml.
 
 # iscsi-initiator-utils provides iscsiadm and /etc/iscsi — needed by any
 # iSCSI-backed CSI driver (e.g. democratic-csi's freenas-api-iscsi against a

@@ -2,7 +2,7 @@
 packer_cache/
 *.pkrvars.hcl
 !*.pkrvars.hcl.example
-!tests/*.pkrvars.hcl
+!kube-node/tests/*.pkrvars.hcl
 crash.log
 build-logs/
 

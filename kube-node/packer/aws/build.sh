@@ -2,9 +2,9 @@
 # Wrapper for 'packer build': resolves k8s_version/cilium_version/argocd_version
 # from kube-platform's platform-versions.yaml and renders the genesis
 # Cilium/Argo CD manifests before every build. AWS counterpart of
-# packer/proxmox/build.sh, minus the Proxmox credential derivation and
+# kube-node/packer/proxmox/build.sh, minus the Proxmox credential derivation and
 # CAPI/CAPMOX render (AWS has no cluster-autoscaler integration yet — see
-# ansible/playbook-aws.yml's bake_stage_capi_manifests: false).
+# kube-node/ansible/playbook-aws.yml's bake_stage_capi_manifests: false).
 set -euo pipefail
 
 # ---- k8s/Cilium/Argo CD version resolution ---------------------------------

@@ -149,7 +149,7 @@ build {
   provisioner "ansible" {
     playbook_file = "../../ansible/playbook-aws.yml"
     user          = var.ssh_username
-    # packer/proxmox/template.pkr.hcl sets use_proxy = false because its
+    # kube-node/packer/proxmox/template.pkr.hcl sets use_proxy = false because its
     # mid-play reboot can dial the VM's real, LAN-reachable IP directly on
     # reconnect. That fallback doesn't exist here — ssh_interface =
     # "session_manager" above means there's no direct IP path at all — so

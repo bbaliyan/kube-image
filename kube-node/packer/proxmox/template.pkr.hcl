@@ -55,7 +55,7 @@ source "proxmox-clone" "rke2" {
   # never migrated.
   cpu_type = var.cpu_type
 
-  # Must match the seed template's own scsi_hardware (packer/proxmox/seed/main.tf)
+  # Must match the seed template's own scsi_hardware (kube-node/packer/proxmox/seed/main.tf)
   # — full_clone copies the disk but Packer's own VM config otherwise
   # defaults the controller to "lsi", and io_thread=true is only valid under
   # virtio-scsi-single.

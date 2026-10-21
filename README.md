@@ -1,4 +1,16 @@
-# kube-image
+# kube-images
+
+Packer templates and Ansible roles that pre-bake machine images. Each image
+has its own directory.
+
+| Directory | Image |
+|---|---|
+| `kube-node/` | RKE2 node image for `kube-compute`. Documented below. |
+
+The commit tier, Renovate config and `make test-commit` live at the root and
+cover every directory.
+
+## kube-node
 
 Packer templates and Ansible roles that pre-bake RKE2 node images — OS prep,
 SELinux/kernel-module prerequisites, and RKE2 binaries baked in — so
@@ -21,10 +33,15 @@ install, and template cleanup. Each provider adds a thin
 `rke2_bake_aws`'s `amazon-ssm-agent` install) and its own Packer template +
 playbook.
 
+The names and tags of the images it builds still say `kube-image` (for
+example the `kube-image` tag on Proxmox templates and the `kube-image=true`
+AMI tag). They are image identifiers, not the repo name. Do not rename them:
+the prune scripts and existing images depend on them.
+
 ## Providers
 
-- **Proxmox** — supported. See `packer/proxmox/README.md`.
-- **AWS** — supported. See `packer/aws/README.md`.
+- **Proxmox** — supported. See `kube-node/packer/proxmox/README.md`.
+- **AWS** — supported. See `kube-node/packer/aws/README.md`.
 - **Azure** — not supported (kube-compute has no viable Ansible transport for it yet).
 
 ## Proxmox credentials
@@ -32,7 +49,7 @@ playbook.
 The devcontainer sources `PROXMOX_VE_ENDPOINT`/`PROXMOX_VE_API_TOKEN` from
 `~/.kube-compute/` automatically. The API token is short-lived (8h) —
 refresh it with `kube-proxmox-login` (also a "Proxmox Login" VS Code task)
-before running `tofu apply` in `packer/proxmox/seed/` or a Packer build if
+before running `tofu apply` in `kube-node/packer/proxmox/seed/` or a Packer build if
 it's expired.
 
 ## Man in the middle network proxy
@@ -45,13 +62,13 @@ otherwise, and never committed (`.gitignore`).
 ## Building
 
 ```bash
-cd packer/proxmox && cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
+cd kube-node/packer/proxmox && cp proxmox.auto.pkrvars.hcl.example proxmox.auto.pkrvars.hcl
 # edit the copy, then:
 packer init . && ./build.sh .
 ```
 
 ```bash
-cd packer/aws && cp aws.auto.pkrvars.hcl.example aws.auto.pkrvars.hcl
+cd kube-node/packer/aws && cp aws.auto.pkrvars.hcl.example aws.auto.pkrvars.hcl
 # edit the copy, then:
 packer init . && ./build.sh .
 ```
@@ -73,7 +90,7 @@ Open in the devcontainer — uses `ghcr.io/bbaliyan/kube-devenv`, which
 already ships Packer. Validate without a live Proxmox/AWS connection:
 
 ```bash
-cd packer/proxmox && packer fmt -check . && packer validate .
+cd kube-node/packer/proxmox && packer fmt -check . && packer validate .
 cd ../aws && packer fmt -check . && packer validate .
 cd ../../ansible
 ansible-playbook --syntax-check -i localhost, playbook-proxmox.yml

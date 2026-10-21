@@ -2,7 +2,7 @@
 # Genesis Argo CD values — rendered into the baked AMI's
 # /opt/kube-compute/manifests/00-argocd.yaml via `helm template` at build
 # time. Deliberate duplicate of
-# packer/proxmox/helm-values/argocd-values.yaml (each provider's Packer
+# kube-node/packer/proxmox/helm-values/argocd-values.yaml (each provider's Packer
 # template is self-contained) — keep both in sync by hand. Only needs to
 # produce *a* working Argo CD; kube-platform's own
 # bootstrap/templates/argocd-app.yaml carries the consumer's chosen ongoing

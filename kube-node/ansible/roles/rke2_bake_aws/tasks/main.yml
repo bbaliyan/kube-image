@@ -1,7 +1,7 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
 # AWS-only bake tasks, included alongside rke2_bake_common by
-# ansible/playbook-aws.yml. The AlmaLinux 10 AMI's own cloud-init/ENA/NVMe
+# kube-node/ansible/playbook-aws.yml. The AlmaLinux 10 AMI's own cloud-init/ENA/NVMe
 # drivers are already correct out of the box, so amazon-ssm-agent is the one
 # genuinely AWS-specific thing this bake needs.
 
