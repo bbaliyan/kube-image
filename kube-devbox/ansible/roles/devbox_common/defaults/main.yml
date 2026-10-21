@@ -1,0 +1,6 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# The dev box is a disposable VM. Nothing here is site-specific: the tailnet tag,
+# the allowed addresses and the SSH keys are launch-time inputs, never baked.
+devbox_expected_distribution: AlmaLinux
+devbox_expected_major_version: "10"

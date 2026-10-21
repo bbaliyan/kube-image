@@ -1,0 +1,8 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Dev box image (AlmaLinux 10, Proxmox)
+  hosts: all
+  gather_facts: true
+  become: true
+  roles:
+    - devbox_common
