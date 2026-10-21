@@ -89,3 +89,9 @@ variable "capmox_version" {
   type        = string
   description = "cluster-api-provider-proxmox (CAPMOX) infrastructure provider version, e.g. v0.6.4. Same resolution and caveat as capi_core_version."
 }
+
+variable "trusted_ca_path" {
+  type        = string
+  default     = ""
+  description = "Optional path on the build host to a CA certificate baked into the trust store at /etc/pki/ca-trust/source/anchors/trusted-ca.crt. Set trusted_ca_in_image = true in kube-compute for nodes booting the image."
+}

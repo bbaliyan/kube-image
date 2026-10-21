@@ -7,6 +7,14 @@ bootstrapping from scratch on every apply. Per-cluster identity, secrets, and
 join logic stay a launch-time concern (`kube-compute`'s `node-bootstrap`
 module), not baked here.
 
+## The bootstrap program is baked
+
+`rke2_bake_common` installs `kube-compute`'s node bootstrap program at
+`/opt/kube-compute/bootstrap.sh`, from the commit pinned in its `defaults/main.yml`;
+bump the pin when that program changes. `trusted_ca_path` optionally bakes a CA
+certificate into the trust store; set `trusted_ca_in_image = true` in `kube-compute`
+for nodes booting that image.
+
 A provider-agnostic `rke2_bake_common` Ansible role handles OS prep, RKE2
 install, and template cleanup. Each provider adds a thin
 `rke2_bake_<provider>` role for whatever's genuinely provider-specific (e.g.

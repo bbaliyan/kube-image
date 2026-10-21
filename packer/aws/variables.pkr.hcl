@@ -78,3 +78,9 @@ variable "rendered_manifests_dir" {
   type        = string
   description = "Directory containing the pre-rendered cilium.yaml/00-argocd.yaml to copy onto the AMI. Always set by build.sh — no default, so a bare 'packer build' fails loudly instead of baking a stale manifest."
 }
+
+variable "trusted_ca_path" {
+  type        = string
+  default     = ""
+  description = "Optional path on the build host to a CA certificate baked into the trust store at /etc/pki/ca-trust/source/anchors/trusted-ca.crt. Set trusted_ca_in_image = true in kube-compute for nodes booting the image."
+}

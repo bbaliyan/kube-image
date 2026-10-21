@@ -179,6 +179,50 @@
 # template there, not here) and copied in as plain files — this VM never
 # runs helm or reaches a chart repo. node-bootstrap applies whichever of
 # these a given cluster needs at first boot.
+- name: bootstrap | create /opt/kube-compute
+  ansible.builtin.file:
+    path: /opt/kube-compute
+    state: directory
+    mode: "0755"
+    owner: root
+    group: root
+  tags: [bootstrap]
+
+- name: bootstrap | install kube-compute's node bootstrap program
+  ansible.builtin.get_url:
+    url: "{{ kube_compute_raw_base }}/{{ kube_compute_ref }}/modules/node-bootstrap/files/bootstrap.sh"
+    dest: /opt/kube-compute/bootstrap.sh
+    mode: "0700"
+    owner: root
+    group: root
+    force: true
+  register: bootstrap_program
+  retries: 3
+  delay: 10
+  until: bootstrap_program is succeeded
+  tags: [bootstrap]
+
+- name: bootstrap | syntax-check the node bootstrap program
+  ansible.builtin.command: bash -n /opt/kube-compute/bootstrap.sh
+  changed_when: false
+  tags: [bootstrap]
+
+- name: bootstrap | install the CA certificate
+  ansible.builtin.copy:
+    src: "{{ trusted_ca_path }}"
+    dest: /etc/pki/ca-trust/source/anchors/trusted-ca.crt
+    mode: "0644"
+    owner: root
+    group: root
+  when: trusted_ca_path | length > 0
+  tags: [bootstrap]
+
+- name: bootstrap | rebuild the trust store
+  ansible.builtin.command: update-ca-trust extract
+  when: trusted_ca_path | length > 0
+  changed_when: true
+  tags: [bootstrap]
+
 - name: gitops | create the genesis manifests directory
   ansible.builtin.file:
     path: /opt/kube-compute/manifests

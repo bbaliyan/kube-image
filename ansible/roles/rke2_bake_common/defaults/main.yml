@@ -21,3 +21,10 @@ bake_stage_capi_manifests: true
 # per attempt.
 bake_reboot_connect_timeout: 5
 bake_reboot_post_delay: 0
+
+# Where the node bootstrap program comes from. Bump the ref when it changes.
+kube_compute_raw_base: "https://raw.githubusercontent.com/bbaliyan/kube-compute"
+kube_compute_ref: "69ef5e2fb1bcf057e6afcde4465e14aa0e64e4bc"
+
+# Optional CA certificate on the build host, baked into the trust store.
+trusted_ca_path: ""
