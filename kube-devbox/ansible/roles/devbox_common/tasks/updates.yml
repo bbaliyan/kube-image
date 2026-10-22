@@ -1,0 +1,19 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Updates | install security updates only
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/automatic.conf
+    regexp: '^#?\s*upgrade_type\s*='
+    line: "upgrade_type = security"
+
+- name: Updates | apply them without asking
+  ansible.builtin.lineinfile:
+    path: /etc/dnf/automatic.conf
+    regexp: '^#?\s*apply_updates\s*='
+    line: "apply_updates = yes"
+
+- name: Updates | enable the timer
+  ansible.builtin.systemd_service:
+    name: dnf-automatic.timer
+    enabled: true
+  when: devbox_manage_services | bool

@@ -10,16 +10,18 @@ SHELL := bash
 
 CHECKS    ?= /usr/share/kube-devenv/checks
 PROVIDERS := aws proxmox
-SCRIPTS   := $(wildcard kube-node/packer/*/*.sh) $(wildcard kube-devbox/packer/*/*.sh) $(wildcard .devcontainer/*.sh) .githooks/pre-commit
+DEVBOX_ROLE := kube-devbox/ansible/roles/devbox_common
+SCRIPTS   := $(wildcard kube-node/packer/*/*.sh) $(wildcard kube-devbox/packer/*/*.sh) $(wildcard kube-devbox/tests/*.sh) $(DEVBOX_ROLE)/files/devbox-firewall-apply $(DEVBOX_ROLE)/files/devbox-tailscale-up $(wildcard .devcontainer/*.sh) .githooks/pre-commit
 BASE_REF  ?= $(shell git rev-parse --verify --quiet origin/main)
 
 # This repo has no DCO, so commits need no Signed-off-by line.
 export REQUIRE_SIGNOFF := 0
 
 .PHONY: test-commit test-fast hooks fmt lint-scripts lint-yaml lint-ansible \
-	lint-pipelines validate validate-devbox secrets commit-messages
+	lint-pipelines validate validate-devbox test-devbox test-devbox-container \
+	secrets commit-messages
 
-test-commit: test-fast lint-scripts lint-yaml lint-ansible lint-pipelines validate commit-messages
+test-commit: test-fast lint-scripts lint-yaml lint-ansible lint-pipelines validate test-devbox commit-messages
 
 test-fast: fmt secrets
 
@@ -60,6 +62,15 @@ validate-devbox:
 	rm -f /tmp/validate-devbox-key /tmp/validate-devbox-key.pub
 	ssh-keygen -q -t ed25519 -N '' -f /tmp/validate-devbox-key
 	cd kube-devbox/packer/proxmox && packer init . && packer validate -var-file=$(CURDIR)/kube-devbox/tests/proxmox.pkrvars.hcl -var ssh_private_key_file=/tmp/validate-devbox-key .
+
+# Role checks that need no Docker daemon. The container test skips itself where
+# there is none (inside kube-devenv), so run test-devbox-container on a Docker host.
+test-devbox:
+	bash kube-devbox/tests/role-static.sh
+	bash kube-devbox/tests/role-container.sh
+
+test-devbox-container:
+	DEVBOX_REQUIRE_DOCKER=1 bash kube-devbox/tests/role-container.sh
 
 validate-seed:
 	rm -rf /tmp/validate-seed && cp -r kube-node/packer/proxmox/seed /tmp/validate-seed

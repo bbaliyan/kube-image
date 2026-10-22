@@ -1,0 +1,36 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Packages | Docker repository
+  ansible.builtin.yum_repository:
+    name: docker-ce-stable
+    description: Docker CE Stable
+    baseurl: "{{ devbox_docker_repo_baseurl }}"
+    gpgcheck: true
+    gpgkey: "{{ devbox_docker_repo_gpgkey }}"
+
+- name: Packages | Tailscale repository
+  ansible.builtin.yum_repository:
+    name: tailscale-stable
+    description: Tailscale stable
+    baseurl: "{{ devbox_tailscale_repo_baseurl }}"
+    gpgcheck: true
+    gpgkey: "{{ devbox_tailscale_repo_gpgkey }}"
+
+- name: Packages | install everything the box needs
+  ansible.builtin.dnf:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+      - tailscale
+      - openssh-server
+      - nftables
+      - dnf-automatic
+      - git
+      - make
+      - tar
+      - jq
+    state: present
+    update_cache: true

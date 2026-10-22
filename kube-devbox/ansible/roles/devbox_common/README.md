@@ -2,8 +2,13 @@
 
 The one role shared by every dev box image, on every provider.
 
-It is a skeleton for now. It only verifies that the base image is AlmaLinux 10.
-Later tickets add Docker, SSH hardening and the pre-pulled kube-devenv image.
+It installs Docker, hardens SSH, sets up the firewall and automatic security updates,
+installs Tailscale without joining, and pulls the pinned `kube-devenv` image. It ends
+by removing SSH host keys, the machine ID and the cloud-init state.
+
+The `devbox_manage_services`, `devbox_pull_devenv_image` and `devbox_clean_for_template`
+variables switch off the parts that need systemd or a Docker daemon. Only the container
+test turns them off.
 
 Rules for this role:
 

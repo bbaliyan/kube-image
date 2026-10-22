@@ -1,0 +1,21 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# sshd keeps the first value it reads, so the drop-in sorts before the distribution's own files.
+- name: SSH | key-only login drop-in
+  ansible.builtin.template:
+    src: sshd-00-devbox.conf.j2
+    dest: /etc/ssh/sshd_config.d/00-devbox.conf
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: SSH | verify the whole sshd configuration
+  ansible.builtin.command: /usr/sbin/sshd -t
+  changed_when: false
+  when: devbox_manage_services | bool
+
+- name: SSH | enable sshd
+  ansible.builtin.systemd_service:
+    name: sshd
+    enabled: true
+  when: devbox_manage_services | bool

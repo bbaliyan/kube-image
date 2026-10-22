@@ -4,3 +4,22 @@
 # the allowed addresses and the SSH keys are launch-time inputs, never baked.
 devbox_expected_distribution: AlmaLinux
 devbox_expected_major_version: "10"
+
+# The login user. Its SSH keys arrive at launch through cloud-init, never in the image.
+devbox_user: almalinux
+
+# The pinned dev container image. It is pulled at build time so the first run is fast.
+devbox_devenv_image: ghcr.io/bbaliyan/kube-devenv
+# renovate: datasource=docker depName=ghcr.io/bbaliyan/kube-devenv
+devbox_devenv_version: "0.11.1"
+
+devbox_docker_repo_baseurl: "https://download.docker.com/linux/rhel/$releasever/$basearch/stable"
+devbox_docker_repo_gpgkey: "https://download.docker.com/linux/rhel/gpg"
+devbox_tailscale_repo_baseurl: "https://pkgs.tailscale.com/stable/rhel/$releasever/$basearch"
+devbox_tailscale_repo_gpgkey: "https://pkgs.tailscale.com/stable/rhel/$releasever/repo.gpg"
+
+# Switches for the container test, which has no systemd and no Docker daemon.
+# A real image build leaves all three on.
+devbox_manage_services: true
+devbox_pull_devenv_image: true
+devbox_clean_for_template: true
