@@ -7,6 +7,7 @@
     owner: root
     group: root
     mode: "0644"
+  notify: Restart Docker
 
 # Docker group access is root-equivalent. That is accepted here: the box is disposable
 # and holds no credential.

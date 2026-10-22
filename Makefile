@@ -40,7 +40,8 @@ lint-yaml:
 	yamllint --strict .
 
 lint-ansible:
-	ansible-lint kube-node/ansible/ kube-devbox/ansible/
+	ansible-lint kube-node/ansible/
+	ansible-lint -c kube-devbox/.ansible-lint kube-devbox/ansible/
 
 lint-pipelines:
 	$(CHECKS)/pipeline-lint.sh .

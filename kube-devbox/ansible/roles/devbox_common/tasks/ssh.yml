@@ -8,6 +8,7 @@
     owner: root
     group: root
     mode: "0600"
+  notify: Reload sshd
 
 - name: SSH | verify the whole sshd configuration
   ansible.builtin.command: /usr/sbin/sshd -t

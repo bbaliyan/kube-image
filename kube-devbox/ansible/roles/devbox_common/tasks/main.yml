@@ -23,6 +23,10 @@
 - name: Import | Docker settings and the prune timer
   ansible.builtin.import_tasks: docker.yml
 
+# Pending reloads and restarts run now, before the image pull and the cleanup.
+- name: Flush | run pending handlers
+  ansible.builtin.meta: flush_handlers
+
 - name: Import | the pinned dev container image
   ansible.builtin.import_tasks: devenv.yml
 

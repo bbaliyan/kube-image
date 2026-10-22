@@ -17,6 +17,7 @@ The build VM must reach the template VM's address. The bridge name is an input.
 ## Notes
 
 - The seed template must have a cloud-init drive and the QEMU guest agent. The clone keeps them. Each clone then takes its keys and launch inputs from cloud-init.
+- The cloud-init drive of the template keeps the build public key. A clone accepts that key unless the launch overrides the SSH keys. See "Launch contract" in `kube-devbox/README.md`.
 - The build removes the SSH host keys, the machine ID and the cloud-init state, so every clone makes its own.
 - Nothing site-specific goes into the image. The tailnet tag, the allowed addresses and the SSH keys are launch-time inputs. See `kube-devbox/README.md`.
 - A real build is run by the operator. The fixture tests only validate the template.

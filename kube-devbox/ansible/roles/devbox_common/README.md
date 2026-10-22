@@ -14,3 +14,5 @@ Rules for this role:
 
 - Nothing site-specific is baked. The tailnet tag, the allowed addresses and the keys are launch-time inputs.
 - The role holds no credential, no private key and no token.
+
+The launch inputs and their file formats are in the "Launch contract" section of `kube-devbox/README.md`.

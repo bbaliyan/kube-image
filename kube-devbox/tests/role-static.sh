@@ -78,16 +78,19 @@ expect_not "firewall closed: no SSH rule" grep -q 'dport 22' <<<"$closed"
 expect_not "firewall: missing input exits non-zero" env DEVBOX_LAUNCH_ENV="${work}/absent.env" bash "$fw" --print
 missing="$(DEVBOX_LAUNCH_ENV="${work}/absent.env" bash "$fw" --print 2>/dev/null || true)"
 expect_not "firewall: missing input opens no SSH" grep -q 'dport 22' <<<"$missing"
+expect_not "firewall: missing input drops the tailnet rule too" grep -q 'iifname' <<<"$missing"
 
 printf 'DEVBOX_SSH_SOURCES="192.0.2.10 ; rm -rf /"\n' >"${work}/evil.env"
 expect_not "firewall: bad source exits non-zero" env DEVBOX_LAUNCH_ENV="${work}/evil.env" bash "$fw" --print
 evil="$(DEVBOX_LAUNCH_ENV="${work}/evil.env" bash "$fw" --print 2>/dev/null || true)"
 expect_not "firewall: bad source opens no SSH" grep -q 'dport 22' <<<"$evil"
+expect_not "firewall: bad source drops the tailnet rule too" grep -q 'iifname' <<<"$evil"
 
 printf 'DEVBOX_SSH_SOURCES="192.0.2.10"\nDEVBOX_TAILNET_INTERFACE="ts0; drop"\n' >"${work}/badif.env"
 expect_not "firewall: bad interface exits non-zero" env DEVBOX_LAUNCH_ENV="${work}/badif.env" bash "$fw" --print
 badif="$(DEVBOX_LAUNCH_ENV="${work}/badif.env" bash "$fw" --print 2>/dev/null || true)"
 expect_not "firewall: bad interface opens no SSH" grep -q 'dport 22' <<<"$badif"
+expect_not "firewall: bad interface drops the tailnet rule too" grep -q 'iifname' <<<"$badif"
 
 expect_not "firewall: unknown option exits non-zero" bash "$fw" --nope
 
@@ -130,10 +133,70 @@ printf 'placeholder-not-a-key' >"$keyfile"
 printf 'DEVBOX_TAILNET_TAG="tag:dev; id"\n' >"${work}/badtag.env"
 expect_not "tailscale: bad tag exits non-zero" env PATH="${stub}:${PATH}" DEVBOX_TAILSCALE_KEY_FILE="$keyfile" DEVBOX_LAUNCH_ENV="${work}/badtag.env" bash "$ts"
 expect_not "tailscale: bad tag does not call tailscale" test -s "$STUB_LOG"
+expect "tailscale: bad tag still removes the key file" test ! -e "$keyfile"
 
 printf 'DEVBOX_TAILNET_TAG=tag:dev\n' >"${work}/ts.env"
+printf 'placeholder-not-a-key' >"$keyfile"
 expect_not "tailscale: a failing join exits non-zero" env STUB_FAIL=1 PATH="${stub}:${PATH}" DEVBOX_TAILSCALE_KEY_FILE="$keyfile" DEVBOX_LAUNCH_ENV="${work}/ts.env" bash "$ts"
-expect "tailscale: a failing join keeps the key file for a retry" test -e "$keyfile"
+expect "tailscale: a failing join still removes the key file" test ! -e "$keyfile"
+
+
+# --- the launch contract is documented
+readme="${here}/../README.md"
+for var in DEVBOX_SSH_SOURCES DEVBOX_TAILNET_INTERFACE DEVBOX_TAILNET_TAG; do
+  expect "scripts read ${var}" grep -q "$var" "$fw" "$ts"
+  expect "README documents ${var}" grep -q "$var" "$readme"
+done
+expect "README documents the key file path" grep -q '/etc/devbox/tailscale-authkey' "$readme"
+expect "README documents the key file mode" grep -q '| 0600 |' "$readme"
+expect "README documents the default tag" grep -q 'tag:dev' "$readme"
+expect "README warns against defer" grep -q 'defer: true' "$readme"
+expect "README says a bad launch.env fails closed" grep -qi 'fully closed' "$readme"
+expect_not "README does not say the tailnet stays open" grep -qiE 'reachable only through the tailnet' "$readme"
+expect "README documents the Docker port bypass" grep -q 'docker run -p' "$readme"
+# The cloud-init example must be valid YAML and write both files.
+awk '/^```yaml/{f=1;next} /^```/{f=0} f' "$readme" >"${work}/example.yml"
+expect "README cloud-init example is valid YAML" python3 -c "
+import sys, yaml
+d = yaml.safe_load(open(sys.argv[1]))
+paths = {f['path']: f for f in d['write_files']}
+assert paths['/etc/devbox/tailscale-authkey']['permissions'] == '0600'
+assert 'defer' not in paths['/etc/devbox/launch.env']
+assert 'DEVBOX_SSH_SOURCES=\"' in paths['/etc/devbox/launch.env']['content']
+" "${work}/example.yml"
+
+# --- cleanup: the build login key goes last, and the extra files go
+cleanup="${role}/tasks/cleanup.yml"
+expect "cleanup: the login key is removed by the very last task" python3 -c "
+import sys, yaml
+t = yaml.safe_load(open(sys.argv[1]))
+last = t[-1]['ansible.builtin.file']
+assert last['path'].endswith('/.ssh/authorized_keys') and 'root' not in last['path'], last
+assert last['state'] == 'absent'
+" "$cleanup"
+for target in /root/.ssh/authorized_keys /root/.bash_history '.bash_history' /var/lib/tailscale /etc/machine-id 'ssh_host_'; do
+  expect "cleanup removes ${target}" grep -qF -- "$target" "$cleanup"
+done
+expect "cleanup: the root key is removed before the last task" python3 -c "
+import sys, yaml
+t = yaml.safe_load(open(sys.argv[1]))
+paths = [x.get('ansible.builtin.file', {}).get('path') for x in t[:-1]]
+assert '/root/.ssh/authorized_keys' in paths
+" "$cleanup"
+
+# --- handlers instead of inline reloads
+expect "sshd drop-in notifies a reload" grep -q 'notify: Reload sshd' "${role}/tasks/ssh.yml"
+expect "docker settings notify a restart" grep -q 'notify: Restart Docker' "${role}/tasks/docker.yml"
+expect "handlers exist" bash -c "grep -q '^- name: Reload sshd' '${role}/handlers/main.yml' && grep -q '^- name: Restart Docker' '${role}/handlers/main.yml'"
+expect "handlers are flushed before the cleanup" python3 -c "
+import sys, yaml
+t = yaml.safe_load(open(sys.argv[1]))
+names = [list(x.values())[1] if 'ansible.builtin.meta' not in x else 'meta' for x in t]
+i_meta = next(i for i, x in enumerate(t) if x.get('ansible.builtin.meta') == 'flush_handlers')
+i_clean = next(i for i, x in enumerate(t) if 'cleanup' in str(x.get('ansible.builtin.import_tasks', '')))
+assert i_meta < i_clean
+" "${role}/tasks/main.yml"
+expect_not "no lint skip for no-handler in the devbox config" grep -qE 'no-handler|no-changed-when' "${here}/../.ansible-lint"
 
 # --- units
 for unit in "$role"/files/*.service "$role"/files/*.timer; do

@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: Apache-2.0
 # Joins the tailnet once, with the auth key and tag that arrive at launch.
-# The key file is removed after use, so the box keeps no auth key.
+# The key file is removed on every exit, success or not, so the box never keeps an
+# auth key. A failed join is a relaunch: the key is gone and cannot be reused.
 set -euo pipefail
 
 env_file="${DEVBOX_LAUNCH_ENV:-/etc/devbox/launch.env}"
 key_file="${DEVBOX_TAILSCALE_KEY_FILE:-/etc/devbox/tailscale-authkey}"
 tag="tag:dev"
+
+trap 'rm -f "$key_file"' EXIT
 
 if [ ! -s "$key_file" ]; then
   echo "devbox-tailscale: no auth key at ${key_file}, not joining the tailnet" >&2
@@ -29,5 +32,3 @@ tailscale up \
   --accept-routes=false \
   --accept-dns=false \
   --advertise-exit-node=false
-
-rm -f "$key_file"

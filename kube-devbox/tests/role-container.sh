@@ -83,6 +83,21 @@ check "firewall: SSH only from the named source" "grep -q 'ip saddr { 192.0.2.10
 check "firewall: default drop" "grep -q 'policy drop' <<<\"\$rules\""
 check "firewall closed rules accepted by nft" "/usr/local/sbin/devbox-firewall-apply --closed --print | nft -c -f -"
 
+# Cleanup, run last on a throwaway container: it removes the identity files, the history
+# and the login keys.
+mkdir -p /home/almalinux/.ssh /root/.ssh /var/lib/tailscale
+touch /home/almalinux/.ssh/authorized_keys /root/.ssh/authorized_keys /home/almalinux/.bash_history /root/.bash_history /var/lib/tailscale/tailscaled.state
+ansible-playbook -i inventory playbook-proxmox.yml -l localhost \
+  -e devbox_manage_services=false \
+  -e devbox_pull_devenv_image=false \
+  -e devbox_clean_for_template=true >/dev/null
+check "cleanup: SSH host keys removed" "! ls /etc/ssh/ssh_host_*"
+check "cleanup: machine ID empty" "! test -s /etc/machine-id"
+check "cleanup: login key removed" "! test -e /home/almalinux/.ssh/authorized_keys"
+check "cleanup: root key removed" "! test -e /root/.ssh/authorized_keys"
+check "cleanup: shell history removed" "! test -e /home/almalinux/.bash_history && ! test -e /root/.bash_history"
+check "cleanup: Tailscale state removed" "! test -e /var/lib/tailscale"
+
 # No private key or token anywhere the role wrote.
 check "no private key under /etc/devbox or /home" "! grep -rIlE 'BEGIN [A-Z ]*PRIVATE KEY' /etc/devbox /home /root"
 check "no token-like file in /etc/devbox" "! grep -rIlE 'tskey-|ghp_|github_pat_' /etc/devbox"

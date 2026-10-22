@@ -1,0 +1,15 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# main.yml flushes these before the image pull and the cleanup, because the last
+# cleanup task removes the key that Packer and Ansible log in with.
+- name: Reload sshd
+  ansible.builtin.systemd_service:
+    name: sshd
+    state: reloaded
+  when: devbox_manage_services | bool
+
+- name: Restart Docker
+  ansible.builtin.systemd_service:
+    name: docker.service
+    state: restarted
+  when: devbox_manage_services | bool
