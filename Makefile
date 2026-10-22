@@ -10,16 +10,16 @@ SHELL := bash
 
 CHECKS    ?= /usr/share/kube-devenv/checks
 PROVIDERS := aws proxmox
-SCRIPTS   := $(wildcard kube-node/packer/*/*.sh) $(wildcard kube-devbox/packer/*/*.sh) $(wildcard .devcontainer/*.sh) .githooks/pre-commit
+SCRIPTS   := $(wildcard kube-node/packer/*/*.sh) $(wildcard kube-devbox/packer/*/*.sh) $(wildcard kube-devbox/scripts/*.sh) $(wildcard kube-devbox/tests/*.sh) $(wildcard .devcontainer/*.sh) .githooks/pre-commit
 BASE_REF  ?= $(shell git rev-parse --verify --quiet origin/main)
 
 # This repo has no DCO, so commits need no Signed-off-by line.
 export REQUIRE_SIGNOFF := 0
 
 .PHONY: test-commit test-fast hooks fmt lint-scripts lint-yaml lint-ansible \
-	lint-pipelines validate validate-devbox secrets commit-messages
+	lint-pipelines validate validate-devbox test-devbox secrets commit-messages
 
-test-commit: test-fast lint-scripts lint-yaml lint-ansible lint-pipelines validate commit-messages
+test-commit: test-fast lint-scripts lint-yaml lint-ansible lint-pipelines validate test-devbox commit-messages
 
 test-fast: fmt secrets
 
@@ -60,6 +60,10 @@ validate-devbox:
 	rm -f /tmp/validate-devbox-key /tmp/validate-devbox-key.pub
 	ssh-keygen -q -t ed25519 -N '' -f /tmp/validate-devbox-key
 	cd kube-devbox/packer/proxmox && packer init . && packer validate -var-file=$(CURDIR)/kube-devbox/tests/proxmox.pkrvars.hcl -var ssh_private_key_file=/tmp/validate-devbox-key .
+
+# The acceptance script runs against a stand-in ssh, so no box is needed.
+test-devbox:
+	bash kube-devbox/tests/acceptance.sh
 
 validate-seed:
 	rm -rf /tmp/validate-seed && cp -r kube-node/packer/proxmox/seed /tmp/validate-seed
