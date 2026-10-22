@@ -11,7 +11,7 @@ SHELL := bash
 CHECKS    ?= /usr/share/kube-devenv/checks
 PROVIDERS := aws proxmox
 DEVBOX_ROLE := kube-devbox/ansible/roles/devbox_common
-SCRIPTS   := $(wildcard kube-node/packer/*/*.sh) $(wildcard kube-devbox/packer/*/*.sh) $(wildcard kube-devbox/tests/*.sh) $(DEVBOX_ROLE)/files/devbox-firewall-apply $(DEVBOX_ROLE)/files/devbox-tailscale-up $(wildcard .devcontainer/*.sh) .githooks/pre-commit
+SCRIPTS   := $(wildcard kube-node/packer/*/*.sh) $(wildcard kube-devbox/packer/*/*.sh) $(wildcard kube-devbox/scripts/*.sh) $(wildcard kube-devbox/tests/*.sh) $(DEVBOX_ROLE)/files/devbox-firewall-apply $(DEVBOX_ROLE)/files/devbox-tailscale-up $(wildcard .devcontainer/*.sh) .githooks/pre-commit
 BASE_REF  ?= $(shell git rev-parse --verify --quiet origin/main)
 
 # This repo has no DCO, so commits need no Signed-off-by line.
@@ -64,11 +64,12 @@ validate-devbox:
 	ssh-keygen -q -t ed25519 -N '' -f /tmp/validate-devbox-key
 	cd kube-devbox/packer/proxmox && packer init . && packer validate -var-file=$(CURDIR)/kube-devbox/tests/proxmox.pkrvars.hcl -var ssh_private_key_file=/tmp/validate-devbox-key .
 
-# Role checks that need no Docker daemon. The container test skips itself where
+# Role checks and acceptance script tests that need no Docker daemon. The container test skips itself where
 # there is none (inside kube-devenv), so run test-devbox-container on a Docker host.
 test-devbox:
 	bash kube-devbox/tests/role-static.sh
 	bash kube-devbox/tests/role-container.sh
+	bash kube-devbox/tests/acceptance.sh
 
 test-devbox-container:
 	DEVBOX_REQUIRE_DOCKER=1 bash kube-devbox/tests/role-container.sh
