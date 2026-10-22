@@ -45,6 +45,7 @@ lint-ansible:
 
 lint-pipelines:
 	$(CHECKS)/pipeline-lint.sh .
+	tests/check-gitlab-ci.sh
 
 # Fixture variables stand in for the real ones, so no cloud access is needed.
 validate: $(addprefix validate-packer-,$(PROVIDERS)) validate-seed validate-devbox
