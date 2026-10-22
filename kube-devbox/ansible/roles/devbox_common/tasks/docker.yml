@@ -1,0 +1,40 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+- name: Docker | settings
+  ansible.builtin.copy:
+    src: docker-daemon.json
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Docker
+
+# Docker group access is root-equivalent. That is accepted here: the box is disposable
+# and holds no credential.
+- name: Docker | the login user may use Docker
+  ansible.builtin.user:
+    name: "{{ devbox_user }}"
+    groups: docker
+    append: true
+
+- name: Docker | prune units
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - devbox-docker-prune.service
+    - devbox-docker-prune.timer
+  register: devbox_prune_units
+
+- name: Docker | enable Docker and the prune timer
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    daemon_reload: "{{ devbox_prune_units is changed }}"
+  loop:
+    - docker.service
+    - devbox-docker-prune.timer
+  when: devbox_manage_services | bool

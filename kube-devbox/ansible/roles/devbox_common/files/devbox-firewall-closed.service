@@ -1,0 +1,14 @@
+[Unit]
+Description=Dev box firewall, closed rules (early boot)
+DefaultDependencies=no
+After=local-fs.target
+Before=network-pre.target sshd.service
+Wants=network-pre.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/devbox-firewall-apply --closed
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=Dev box firewall, rules from the launch input
+After=cloud-init.service devbox-firewall-closed.service
+Wants=cloud-init.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/devbox-firewall-apply
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,101 @@
+#!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0
+# Loads the dev box firewall. It fails closed: with no usable launch input,
+# nothing can open an SSH session. Cloud-init writes the input at launch.
+#
+#   devbox-firewall-apply            read the launch input and load the rules
+#   devbox-firewall-apply --closed   load the closed rules (used early at boot)
+#   Flags can be combined: --closed --print
+#   devbox-firewall-apply --print    print the rules and load nothing
+#
+# DEVBOX_LAUNCH_ENV overrides the input path, for tests.
+set -euo pipefail
+
+env_file="${DEVBOX_LAUNCH_ENV:-/etc/devbox/launch.env}"
+mode="apply"
+closed="no"
+for arg in "$@"; do
+  case "$arg" in
+    --print) mode="print" ;;
+    --closed) closed="yes" ;;
+    *) echo "usage: devbox-firewall-apply [--closed] [--print]" >&2; exit 2 ;;
+  esac
+done
+
+sources=""
+tailnet_if="tailscale0"
+bad=""
+if [ "$closed" = "no" ]; then
+  if [ -r "$env_file" ]; then
+    # shellcheck source=/dev/null
+    . "$env_file"
+    sources="${DEVBOX_SSH_SOURCES:-}"
+    tailnet_if="${DEVBOX_TAILNET_INTERFACE:-tailscale0}"
+  else
+    echo "devbox-firewall: no launch input at ${env_file}, loading closed rules" >&2
+    bad="missing"
+  fi
+fi
+
+if ! [[ "$tailnet_if" =~ ^[A-Za-z0-9_.-]{1,15}$ ]]; then
+  echo "devbox-firewall: bad tailnet interface name, loading closed rules" >&2
+  tailnet_if="tailscale0"
+  bad="interface"
+fi
+
+v4=()
+v6=()
+for s in $sources; do
+  if ! [[ "$s" =~ ^[0-9A-Fa-f:.]+(/[0-9]{1,3})?$ ]]; then
+    echo "devbox-firewall: bad source address '${s}', loading closed rules" >&2
+    bad="source"
+    break
+  fi
+  case "$s" in
+    *:*) v6+=("$s") ;;
+    *) v4+=("$s") ;;
+  esac
+done
+if [ -n "$bad" ]; then
+  v4=()
+  v6=()
+fi
+
+join() { local IFS=,; echo "$*"; }
+
+render() {
+  cat <<RULES
+table inet devbox
+delete table inet devbox
+table inet devbox {
+  chain input {
+    type filter hook input priority 0; policy drop;
+    iif "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+    ip protocol icmp icmp type { destination-unreachable, time-exceeded } accept
+    meta l4proto ipv6-icmp accept
+    udp sport 67 udp dport 68 accept
+RULES
+  if [ "${#v4[@]}" -gt 0 ]; then
+    echo "    ip saddr { $(join "${v4[@]}") } tcp dport 22 accept"
+  fi
+  if [ "${#v6[@]}" -gt 0 ]; then
+    echo "    ip6 saddr { $(join "${v6[@]}") } tcp dport 22 accept"
+  fi
+  if [ "$closed" = "no" ] && [ -z "$bad" ]; then
+    echo "    iifname \"${tailnet_if}\" tcp dport 22 accept"
+  fi
+  echo "  }"
+  echo "}"
+}
+
+if [ "$mode" = "print" ]; then
+  render
+  [ -z "$bad" ]
+  exit
+fi
+
+# The first lines create the table if it is missing, so the delete cannot fail.
+render | nft -f -
+[ -z "$bad" ]

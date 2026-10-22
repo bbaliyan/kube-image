@@ -1,0 +1,76 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# Runs last. The image keeps no key, no token and no identity: every clone makes
+# its own SSH host keys and machine ID, and takes its login keys from cloud-init.
+# Packer and Ansible log in with the login user's authorized_keys, so removing it
+# must be the very last task.
+- name: Cleanup | find SSH host keys
+  ansible.builtin.find:
+    paths: /etc/ssh
+    patterns: "ssh_host_*"
+  register: devbox_host_keys
+  when: devbox_clean_for_template | bool
+
+- name: Cleanup | remove SSH host keys
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ devbox_host_keys.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when: devbox_clean_for_template | bool
+
+- name: Cleanup | clear the machine ID so every clone gets its own
+  ansible.builtin.copy:
+    content: ""
+    dest: /etc/machine-id
+    owner: root
+    group: root
+    mode: "0444"
+    force: true
+  when: devbox_clean_for_template | bool
+
+- name: Cleanup | remove Tailscale state, so no node identity is baked
+  ansible.builtin.file:
+    path: /var/lib/tailscale
+    state: absent
+  when: devbox_clean_for_template | bool
+
+- name: Cleanup | remove shell history
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/home/{{ devbox_user }}/.bash_history"
+    - /root/.bash_history
+  when: devbox_clean_for_template | bool
+
+- name: Cleanup | remove the root login keys
+  ansible.builtin.file:
+    path: /root/.ssh/authorized_keys
+    state: absent
+  when: devbox_clean_for_template | bool
+
+- name: Cleanup | is cloud-init installed
+  ansible.builtin.stat:
+    path: /usr/bin/cloud-init
+  register: devbox_cloud_init
+  when: devbox_clean_for_template | bool
+
+- name: Cleanup | reset cloud-init so it runs again at the first boot of a clone
+  ansible.builtin.command: cloud-init clean --logs
+  changed_when: true
+  when:
+    - devbox_clean_for_template | bool
+    - devbox_cloud_init.stat.exists | default(false)
+
+- name: Cleanup | clear package caches
+  ansible.builtin.command: dnf clean all
+  changed_when: false
+  when: devbox_clean_for_template | bool
+
+- name: Cleanup | remove the build login keys, last because Packer logs in with them
+  ansible.builtin.file:
+    path: "/home/{{ devbox_user }}/.ssh/authorized_keys"
+    state: absent
+  when: devbox_clean_for_template | bool
