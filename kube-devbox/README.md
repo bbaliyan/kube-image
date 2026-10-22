@@ -21,6 +21,14 @@ Before the hardening slice, the box is on the LAN bridge. In that state the
 rows for the home network and for a non-allowed address cannot pass. The script
 reports them as SKIPPED. Add `--isolated` when the box is hardened.
 
+Two rows need passwordless sudo for the login user: the root login row and the
+secret scan. If sudo is not available, the root row reports LIMITED. A LIMITED
+row proves less than a PASS row. The secret scan then fails, because it cannot
+read every directory.
+
+On macOS, install GNU coreutils first (`brew install coreutils`). The script
+needs `timeout` or `gtimeout`.
+
 1. Log in to the box once by hand, so that your machine knows the host key.
 2. Set the inputs:
 
@@ -32,11 +40,12 @@ reports them as SKIPPED. Add `--isolated` when the box is hardened.
    export SPOKE_REPO=<https URL of a public spoke>
    ```
 
-3. If the SSH port is not 22, set `DEVBOX_PORT`. To test a branch of the spoke, set `SPOKE_REF`.
-4. Run `kube-devbox/scripts/acceptance.sh`.
-5. Read the table. Each row shows PASS, FAIL or SKIPPED.
-6. If a row shows FAIL, fix the cause and rebuild the box. Do not repair it by hand.
-7. If the box is hardened, set these inputs and run the script again with `--isolated`:
+3. If the SSH port is not 22, set `DEVBOX_PORT`.
+4. To test a branch of the spoke, set `SPOKE_REF`.
+5. Run `kube-devbox/scripts/acceptance.sh`.
+6. Read the table. Each row shows PASS, FAIL, LIMITED or SKIPPED.
+7. If a row shows FAIL, fix the cause and rebuild the box. Do not repair it by hand.
+8. If the box is hardened, set these inputs:
 
    ```
    export HOME_TARGETS="<host:port> <host:port>"
@@ -44,7 +53,11 @@ reports them as SKIPPED. Add `--isolated` when the box is hardened.
    export PROBE_SSH=<user@host of a machine at a non-allowed address>
    ```
 
-   `PROBE_SSH` is optional. Without it, the non-allowed address row is SKIPPED.
+9. Run the script again with `--isolated`.
+
+With `--isolated`, `PROBE_SSH` is required. The probe must also reach
+`INTERNET_TARGET`. To use another target for the probe, set `PROBE_CONTROL`.
 
 The exit code is 0 if no row failed, 1 if a row failed, and 2 if a tool or an
-input is missing.
+input is missing. A run with SKIPPED or LIMITED rows ends with
+`RESULT: PASS (n skipped, n limited)`.
