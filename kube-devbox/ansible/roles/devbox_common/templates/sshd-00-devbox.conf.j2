@@ -1,0 +1,13 @@
+# Managed by the devbox_common role. Key-only login, no root, one user.
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+PubkeyAuthentication yes
+AuthenticationMethods publickey
+AllowUsers {{ devbox_user }}
+AllowAgentForwarding yes
+X11Forwarding no
+MaxAuthTries 3
+LoginGraceTime 30
+ClientAliveInterval 60
+ClientAliveCountMax 3

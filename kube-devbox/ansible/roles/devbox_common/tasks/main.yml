@@ -7,3 +7,28 @@
       - ansible_facts["distribution_major_version"] == devbox_expected_major_version
     fail_msg: "The dev box image builds on AlmaLinux 10 only."
     success_msg: "Base image is AlmaLinux 10."
+
+- name: Import | packages and repositories
+  ansible.builtin.import_tasks: packages.yml
+
+- name: Import | SSH hardening
+  ansible.builtin.import_tasks: ssh.yml
+
+- name: Import | firewall inside the box
+  ansible.builtin.import_tasks: firewall.yml
+
+- name: Import | automatic security updates
+  ansible.builtin.import_tasks: updates.yml
+
+- name: Import | Docker settings and the prune timer
+  ansible.builtin.import_tasks: docker.yml
+
+# Pending reloads and restarts run now, before the image pull and the cleanup.
+- name: Flush | run pending handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Import | the pinned dev container image
+  ansible.builtin.import_tasks: devenv.yml
+
+- name: Import | clean up so every clone starts fresh
+  ansible.builtin.import_tasks: cleanup.yml

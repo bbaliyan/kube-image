@@ -1,0 +1,11 @@
+[Unit]
+Description=Prune Docker leftovers so the disk does not fill
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/docker container prune --force --filter until=24h
+ExecStart=/usr/bin/docker image prune --force
+ExecStart=/usr/bin/docker network prune --force --filter until=24h
+ExecStart=/usr/bin/docker builder prune --force --filter until=168h

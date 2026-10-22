@@ -1,0 +1,12 @@
+[Unit]
+Description=Join the tailnet once, from the launch input
+After=cloud-init.service tailscaled.service network-online.target devbox-firewall.service
+Wants=tailscaled.service network-online.target
+ConditionPathExists=/etc/devbox/tailscale-authkey
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/devbox-tailscale-up
+
+[Install]
+WantedBy=multi-user.target

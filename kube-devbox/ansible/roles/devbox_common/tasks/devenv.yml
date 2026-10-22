@@ -1,0 +1,15 @@
+---
+# SPDX-License-Identifier: Apache-2.0
+# The first run on a new box is then not slow. The tag is pinned in defaults and
+# kept current by Renovate.
+- name: Dev container | Docker is running for the pull
+  ansible.builtin.systemd_service:
+    name: docker.service
+    state: started
+  when: devbox_pull_devenv_image | bool
+
+- name: Dev container | pull the pinned image
+  ansible.builtin.command: "docker pull {{ devbox_devenv_image }}:{{ devbox_devenv_version }}"
+  register: devbox_devenv_pull
+  changed_when: "'Downloaded newer image' in devbox_devenv_pull.stdout"
+  when: devbox_pull_devenv_image | bool

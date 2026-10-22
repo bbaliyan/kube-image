@@ -1,0 +1,5 @@
+# The dev box role uses handlers and sets changed_when, so it needs fewer skips than kube-node.
+# Task names use a "phase | action" convention.
+skip_list:
+  - name[casing]
+  - var-naming[no-role-prefix]
