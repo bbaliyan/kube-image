@@ -37,7 +37,7 @@ source "proxmox-clone" "rke2" {
   # Semicolon-separated (packer-plugin-proxmox's Tags is a single string,
   # unlike bpg/proxmox's list-typed tags on the seed). seed-vm-<id> traces
   # this build back to the seed it cloned from — Proxmox has no queryable
-  # "resolved source" the way AWS's source-ami-id tag does.
+  # "resolved source".
   tags = "kube-image;template;${local.k8s_version_tag};${local.distro_slug};seed-vm-${var.seed_template_vm_id}"
 
   cores  = 2
@@ -99,7 +99,6 @@ build {
     extra_arguments = [
       "--extra-vars", "k8s_version=${var.k8s_version}",
       "--extra-vars", "rendered_manifests_dir=${var.rendered_manifests_dir}",
-      "--extra-vars", "rendered_capi_manifests_dir=${var.rendered_capi_manifests_dir}",
       "--extra-vars", "trusted_ca_path=${var.trusted_ca_path}",
     ]
   }

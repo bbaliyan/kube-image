@@ -82,24 +82,21 @@ packer init .
    building, so a token refreshed with `kube-proxmox-login` in the same
    terminal is always picked up (the devcontainer's own export only runs
    once, at shell start).
-2. Resolves `k8s_version`/`cilium_version`/`argocd_version` (and
-   `capi_core_version`/`capmox_version`) from kube-platform's
+2. Resolves `k8s_version`/`cilium_version`/`argocd_version` from kube-platform's
    `platform/platform-versions/values.yaml`, so the image can't silently
    drift from what Argo CD will run. **Do not** set these in
    `proxmox.auto.pkrvars.hcl` — a var-file entry outranks `build.sh`'s
    exported `PKR_VAR_*` and would silently defeat the fetch; export
    `PKR_VAR_cilium_version=...` (etc.) at the shell first for a specific pin.
-3. Renders the genesis Cilium/Argo CD manifests (`helm template`) and the
-   CAPI/CAPMOX install manifest (`clusterctl generate provider`) into a temp
+3. Renders the genesis Cilium/Argo CD manifests (`helm template`) into a temp
    dir, for the Ansible provisioner to copy onto the template. Rendered here
    rather than at `kube-compute` apply time because Argo CD's chart alone is
    ~1.9 MB with CRDs — well past Proxmox's 1 MiB cicustom snippet cap.
 
-Building outside the devcontainer or without `build.sh`? Set all six
+Building outside the devcontainer or without `build.sh`? Set all three
 resolved variables explicitly in `proxmox.auto.pkrvars.hcl` (see
 `proxmox.auto.pkrvars.hcl.example`), render the manifests yourself the same
-way `build.sh` does, and pass `-var rendered_manifests_dir=...` and
-`-var rendered_capi_manifests_dir=...` on the command line — there's no
+way `build.sh` does, and pass `-var rendered_manifests_dir=...` on the command line — there's no
 default, so a bare `packer build` fails immediately instead of baking a
 stale or empty manifest.
 
@@ -127,36 +124,6 @@ build VM directly with the same `ssh_username`/keypair Packer uses (its IP
 is printed early in the build log), or open its console from the Proxmox
 UI, and tail e.g. `journalctl -f` or `/var/log/dnf.log` there.
 
-## CAPI/CAPMOX install manifest
-
-This template unconditionally stages
-`/opt/kube-compute/manifests/capi-install.yaml` — CAPI core + CAPMOX only
-(no bootstrap/control-plane provider) — the same way it bakes the
-Cilium/Argo CD manifests regardless of whether a given cluster later enables
-cluster-autoscaler. `kube-compute`'s `bootstrap.sh.tftpl` applies it from
-the genesis node on clusters with `cluster_autoscaler_enabled = true`.
-Cluster-autoscaler workers join via a plain
-`Machine.spec.bootstrap.dataSecretName`, bypassing any bootstrap-provider
-CRD, so every autoscaler-worker `Machine` boots from this same template —
-there's no second, lighter image variant.
-
-CAPMOX's `--infrastructure` generation templates a manager-wide credentials
-Secret (`capmox-manager-credentials`) from `PROXMOX_URL`/`PROXMOX_TOKEN`/
-`PROXMOX_SECRET`. **`build.sh` sets these to fixed, non-functional
-placeholder values — never the real Proxmox endpoint/token.** Whatever
-lands there is baked in plaintext into every image and applied on every
-cluster's genesis node, so a real credential there would be a standing leak
-readable from disk on every VM ever cloned from the template. It doesn't
-need to be real: every `ProxmoxCluster` this project renders sets its own
-`spec.credentialsRef`, which CAPMOX's controller prefers over the
-manager-wide Secret — real per-cluster credentials are delivered by the
-consumer repo at runtime instead (e.g. External Secrets Operator). A
-cluster with a missing/wrong `credentialsRef` fails loudly rather than
-silently reconciling against a leaked fallback.
-
-Requires kube-platform's `platform-versions.yaml` to carry
-`capiCoreVersion`/`capmoxVersion`.
-
 ## VM template naming
 
 Self-descriptive:
@@ -168,9 +135,8 @@ performs no compatibility check against it.
 
 Each template is also tagged `kube-image`, `template`, the sanitized
 `k8s_version`, `almalinux10`, and `seed-vm-<seed_template_vm_id>` (the seed
-this build cloned from — Proxmox has no queryable "resolved source" the way
-AWS's `source-ami-id` tag traces one, so the seed VM ID is the closest
-equivalent fact worth recording).
+this build cloned from — Proxmox has no queryable "resolved source", so the
+seed VM ID is the closest fact worth recording).
 
 ## Pruning old builds
 

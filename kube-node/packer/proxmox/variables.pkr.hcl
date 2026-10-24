@@ -75,21 +75,6 @@ variable "rendered_manifests_dir" {
   description = "Directory containing the pre-rendered cilium.yaml/00-argocd.yaml to copy onto the template. Always set by build.sh — no default, so a bare 'packer build' fails loudly instead of baking a stale manifest."
 }
 
-variable "rendered_capi_manifests_dir" {
-  type        = string
-  description = "Directory containing the pre-rendered capi-install.yaml (CAPI core + CAPMOX only) to copy onto the template. Always set by build.sh — same no-default reasoning as rendered_manifests_dir."
-}
-
-variable "capi_core_version" {
-  type        = string
-  description = "Cluster API core version staged via 'clusterctl generate provider --core', e.g. v1.9.5. Resolved automatically by build.sh — same do-not-set caveat as k8s_version."
-}
-
-variable "capmox_version" {
-  type        = string
-  description = "cluster-api-provider-proxmox (CAPMOX) infrastructure provider version, e.g. v0.6.4. Same resolution and caveat as capi_core_version."
-}
-
 variable "trusted_ca_path" {
   type        = string
   default     = ""

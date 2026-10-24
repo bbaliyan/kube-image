@@ -1,9 +1,14 @@
 ---
 # SPDX-License-Identifier: Apache-2.0
-# Provider-agnostic bake tasks — same AlmaLinux 10 base image, same OS-prep/
-# RKE2-install/template-cleanup steps regardless of which provider's Packer
-# template invokes this role. Provider-specific tasks (e.g. AWS's
-# amazon-ssm-agent install) live in a separate rke2_bake_<provider> role.
+# Bake tasks for the AlmaLinux 10 node image: OS prep, RKE2 install, the
+# bootstrap program and template cleanup. Proxmox-only tasks live in
+# rke2_bake_proxmox.
+
+- name: os-prep | wait for first-boot cloud-init to finish, rc 2 meaning done with recoverable errors
+  ansible.builtin.command: cloud-init status --wait
+  register: cloud_init_wait
+  changed_when: false
+  failed_when: cloud_init_wait.rc not in [0, 2]
 
 - name: os-prep | inotify limits
   ansible.builtin.copy:
@@ -28,44 +33,55 @@
     - dnf-makecache.service
   failed_when: false
 
-- name: os-prep | run dnf update -y (retry + self-heal on lock contention)
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      for attempt in 1 2 3 4 5; do
-        dnf update -y && exit 0
-        [ "$attempt" -eq 5 ] && exit 1
-        sleep 15
-        pkill -x dnf 2>/dev/null || true
-        pkill -x rpm 2>/dev/null || true
-      done
-  changed_when: true
+- name: os-prep | update every package
+  ansible.builtin.dnf:
+    name: "*"
+    state: latest
+    update_only: true
+  register: dnf_update
+  retries: 3
+  delay: 15
+  until: dnf_update is succeeded
 
 # Unconditional, not gated on a needs-restarting check: a full dnf update
 # against a stale base image needs a reboot on virtually every bake anyway
 # (kernel/glibc bumps are near-universal), so the check cost more build time
-# on average than it saved.
+# on average than it saved. The reboot is deferred so the command returns
+# before the connection drops.
 - name: os-prep | reboot after the OS update
   ansible.builtin.reboot:
+    reboot_command: systemd-run --on-active=5 /usr/bin/systemctl reboot
     reboot_timeout: 600
-    connect_timeout: "{{ bake_reboot_connect_timeout }}"
-    post_reboot_delay: "{{ bake_reboot_post_delay }}"
+    connect_timeout: 15
+    post_reboot_delay: 30
 
-- name: os-prep | install ca-certificates and curl, load br_netfilter/overlay
+# AlmaLinux 10's minimal image ships only kernel-modules-core, which
+# excludes nft_compat (the iptables-nft translation shim). Cilium's default
+# VXLAN mode needs it — without it, Cilium's iptables reconciliation fails
+# and freshly created pods become unreachable. "-matched" (not a pinned
+# NVR): BaseOS only keeps this subpackage for the latest kernel, so a pinned
+# request can match nothing.
+- name: os-prep | install ca-certificates, curl, the SELinux tools and kernel-modules-extra for Cilium's nft_compat
+  ansible.builtin.dnf:
+    name:
+      - ca-certificates
+      - curl
+      - kernel-modules-extra-matched
+      - policycoreutils-python-utils
+    state: present
+  register: os_packages
+  retries: 3
+  delay: 15
+  until: os_packages is succeeded
+
+# RHEL10 kernels (6.12+) dropped br_netfilter — bridged traffic is filtered
+# natively via nftables bridge hooks. RHEL9 kernels still ship it and need
+# both.
+- name: os-prep | load overlay, nft_compat and, on kernels that still have it, br_netfilter; enable forwarding
   ansible.builtin.shell:
     cmd: |
       set -euo pipefail
-      dnf install -y ca-certificates curl kernel-modules-extra-matched
-      # AlmaLinux 10's minimal image ships only kernel-modules-core, which
-      # excludes nft_compat (the iptables-nft translation shim). Cilium's
-      # default VXLAN mode needs it — without it, Cilium's iptables
-      # reconciliation fails and freshly created pods become unreachable.
-      # "-matched" (not a pinned NVR): BaseOS only keeps this subpackage for
-      # the latest kernel, so a pinned request can match nothing.
       modprobe nft_compat
-      # RHEL10 kernels (6.12+) dropped br_netfilter — bridged traffic is
-      # filtered natively via nftables bridge hooks. RHEL9 kernels still
-      # ship it and need both.
       if modinfo br_netfilter >/dev/null 2>&1; then
         printf 'br_netfilter\noverlay\n' >/etc/modules-load.d/rke2.conf
         modprobe br_netfilter
@@ -84,23 +100,36 @@
   ansible.builtin.shell:
     cmd: |
       set -euo pipefail
-      dnf install -y policycoreutils-python-utils
       mkdir -p /var/lib/rancher/local-path-provisioner
-      if ! semanage fcontext -l | grep -q '^/var/lib/rancher/local-path-provisioner(/\.\*)?  '; then
+      local_rules="$(semanage fcontext -l -C)"
+      if ! grep -qF '/var/lib/rancher/local-path-provisioner(/.*)?' <<<"${local_rules}"; then
         semanage fcontext -a -t container_file_t '/var/lib/rancher/local-path-provisioner(/.*)?'
       fi
       restorecon -R /var/lib/rancher/local-path-provisioner
+    executable: /bin/bash
+  changed_when: true
 
-- name: selinux-prep | add the rancher-rke2-common repo
+# The same repositories get.rke2.io adds. The minor-version repo keeps every
+# recent patch build available at once, so all four packages are installed
+# in one transaction pinned to the exact version; installed separately,
+# dnf can land rke2-common on a different patch than rke2-server.
+- name: rke2 | add the Rancher RKE2 repositories
   ansible.builtin.yum_repository:
-    name: rancher-rke2-common-stable
-    description: Rancher RKE2 Common (stable)
-    baseurl: https://rpm.rancher.io/rke2/stable/common/centos/9/noarch
-    enabled: true
+    name: "{{ item.name }}"
+    description: "{{ item.name }}"
+    baseurl: "{{ item.baseurl }}"
     gpgcheck: true
     gpgkey: https://rpm.rancher.io/public.key
+  loop:
+    - name: rancher-rke2-common-stable
+      baseurl: "https://rpm.rancher.io/rke2/stable/common/centos/{{ ansible_facts['distribution_major_version'] }}/noarch"
+    - name: "rancher-rke2-{{ rke2_minor }}-stable"
+      baseurl: "https://rpm.rancher.io/rke2/stable/{{ rke2_minor }}/centos/{{ ansible_facts['distribution_major_version'] }}/$basearch"
+  vars:
+    rke2_minor: "{{ k8s_version | regex_replace('^v([0-9]+[.][0-9]+)[.].*$', '\\1') }}"
+  when: bake_install_rke2
 
-- name: selinux-prep | import the Rancher GPG key (retry — transient failures)
+- name: rke2 | import the Rancher GPG key
   ansible.builtin.rpm_key:
     key: https://rpm.rancher.io/public.key
     state: present
@@ -108,77 +137,31 @@
   retries: 3
   delay: 10
   until: gpg_import is succeeded
-
-- name: selinux-prep | install rke2-selinux (retry + self-heal on lock contention)
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      dnf makecache
-      for attempt in 1 2 3 4 5; do
-        dnf install -y rke2-selinux && exit 0
-        [ "$attempt" -eq 5 ] && exit 1
-        sleep 15
-        pkill -x dnf 2>/dev/null || true
-        pkill -x rpm 2>/dev/null || true
-      done
-  changed_when: true
-
-# e.g. "v1.36.2+rke2r1" -> "1.36.2~rke2r1", the NEVRA rpm.rancher.io actually
-# publishes (confirmed via repoquery). Used below to pin every rke2-*
-# package explicitly.
-- name: rke2 | compute the RPM-style version string for k8s_version
-  ansible.builtin.set_fact:
-    rke2_rpm_version: "{{ k8s_version | regex_replace('^v', '') | regex_replace('\\+', '~') }}"
-
-# get.rke2.io's rpm-method install only installs rke2-server (INSTALL_RKE2_TYPE
-# defaults to "server"). It does add the Rancher RKE2 repos as a side
-# effect, which the next task relies on for rke2-agent.
-- name: rke2 | install RKE2 server (also adds the Rancher RKE2 repos)
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      curl -sfL https://get.rke2.io | sh -
-    creates: /usr/bin/rke2
-  environment:
-    INSTALL_RKE2_VERSION: "{{ k8s_version }}"
   when: bake_install_rke2
 
-# rke2-server's dependency on rke2-common is unversioned, and the
-# "1.36-stable" repo keeps every recent patch build available at once, so
-# dnf's solver can land rke2-common on a different patch than rke2-server's
-# pin. Confirmed on a real bake: rke2-server pinned correctly to 1.36.2 but
-# rke2-common landed on 1.36.3, and `rke2 -v` reported the wrong version.
-- name: rke2 | pin rke2-common to the exact k8s_version (dnf otherwise resolves it independently of rke2-server)
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      dnf install -y "rke2-common-{{ rke2_rpm_version }}"
-  when: bake_install_rke2
-  changed_when: true
-
-# Without this, only rke2-server.service exists, so a worker clone's
-# cloud-init `systemctl enable --now rke2-agent.service` fails outright.
-# Role selection (which unit to enable) is a launch-time decision — this
-# just ensures both are present, unstarted, on every image. Explicitly
-# pinned for the same reason as rke2-common above.
-- name: rke2 | also install rke2-agent (get.rke2.io only installs rke2-server by default)
-  ansible.builtin.shell:
-    cmd: |
-      set -euo pipefail
-      for attempt in 1 2 3 4 5; do
-        dnf install -y "rke2-agent-{{ rke2_rpm_version }}" && exit 0
-        [ "$attempt" -eq 5 ] && exit 1
-        sleep 15
-        pkill -x dnf 2>/dev/null || true
-        pkill -x rpm 2>/dev/null || true
-      done
-    creates: /usr/lib/systemd/system/rke2-agent.service
+# Both server and agent are baked in. Role selection (which unit to enable)
+# is a launch-time decision.
+# e.g. "v1.36.2+rke2r1" -> "1.36.2~rke2r1", the version rpm.rancher.io publishes.
+- name: rke2 | install RKE2 server, agent and common, Kubernetes {{ k8s_version }}
+  ansible.builtin.dnf:
+    name:
+      - rke2-selinux
+      - "rke2-common-{{ rke2_rpm_version }}"
+      - "rke2-server-{{ rke2_rpm_version }}"
+      - "rke2-agent-{{ rke2_rpm_version }}"
+    state: present
+  vars:
+    rke2_rpm_version: "{{ k8s_version | regex_replace('^v', '') | regex_replace('[+-]', '~') }}"
+  register: rke2_packages
+  retries: 3
+  delay: 15
+  until: rke2_packages is succeeded
   when: bake_install_rke2
 
-# Pre-rendered on the Packer build host (each provider's build.sh runs helm
-# template there, not here) and copied in as plain files — this VM never
-# runs helm or reaches a chart repo. node-bootstrap applies whichever of
-# these a given cluster needs at first boot.
+# Pre-rendered on the Packer build host (build.sh runs helm template there,
+# not here) and copied in as plain files — this VM never runs helm or reaches
+# a chart repo. node-bootstrap applies whichever of these a given cluster
+# needs at first boot.
 - name: bootstrap | create /opt/kube-compute
   ansible.builtin.file:
     path: /opt/kube-compute
@@ -207,6 +190,11 @@
   changed_when: false
   tags: [bootstrap]
 
+- name: bootstrap | require the program to declare its bootstrap contract
+  ansible.builtin.command: grep -Eq '^BOOTSTRAP_CONTRACT=[0-9]+$' /opt/kube-compute/bootstrap.sh
+  changed_when: false
+  tags: [bootstrap]
+
 - name: bootstrap | install the CA certificate
   ansible.builtin.copy:
     src: "{{ trusted_ca_path }}"
@@ -230,32 +218,19 @@
     mode: "0700"
     owner: root
     group: root
-  when: bake_copy_gitops_manifests or bake_stage_capi_manifests
+  when: bake_copy_gitops_manifests
 
 - name: gitops | copy the pre-rendered Cilium/Argo CD manifests
   ansible.builtin.copy:
-    src: "{{ item.src }}"
-    dest: "/opt/kube-compute/manifests/{{ item.dest }}"
+    src: "{{ rendered_manifests_dir }}/{{ item }}"
+    dest: "/opt/kube-compute/manifests/{{ item }}"
     mode: "0600"
     owner: root
     group: root
   loop:
-    - { src: "{{ rendered_manifests_dir }}/cilium.yaml", dest: "cilium.yaml" }
-    - { src: "{{ rendered_manifests_dir }}/00-argocd.yaml", dest: "00-argocd.yaml" }
+    - cilium.yaml
+    - 00-argocd.yaml
   when: bake_copy_gitops_manifests
-
-# Baked in unconditionally on Proxmox (playbook-proxmox.yml leaves
-# bake_stage_capi_manifests at its true default); whether a cluster actually
-# needs it is a runtime decision at bootstrap.sh/apply time. AWS has no
-# CAPI/CAPMOX equivalent yet, so playbook-aws.yml sets this false.
-- name: capi | copy the rendered CAPI install manifest
-  ansible.builtin.copy:
-    src: "{{ rendered_capi_manifests_dir }}/capi-install.yaml"
-    dest: /opt/kube-compute/manifests/capi-install.yaml
-    mode: "0600"
-    owner: root
-    group: root
-  when: bake_stage_capi_manifests
 
 # Everything below is template-prep cleanup and MUST stay last: clones must
 # not inherit this builder's machine identity, SSH host keys, or the Packer
