@@ -53,6 +53,11 @@ refresh it with `kube-proxmox-login` (also a "Proxmox Login" VS Code task)
 before running `tofu apply` in `kube-node/packer/proxmox/seed/` or a Packer build if
 it's expired.
 
+`kube-proxmox-login` only rewrites the file. A terminal that is already open
+keeps its old token, so run `source ~/.kube-compute/proxmox` in it after the
+refresh, and in each new terminal. `build.sh` re-reads the file itself; `tofu`
+and `prune-images.sh` do not, and fail with `HTTP 401` on a stale token.
+
 ## Man in the middle network proxy
 
 Behind a MITM proxy? Drop your org's root CA at
