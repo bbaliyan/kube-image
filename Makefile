@@ -9,7 +9,6 @@ SHELL := bash
 .SHELLFLAGS := -eu -o pipefail -c
 
 CHECKS    ?= /usr/share/kube-devenv/checks
-PROVIDERS := aws proxmox
 DEVBOX_ROLE := kube-devbox/ansible/roles/devbox_common
 SCRIPTS   := $(wildcard kube-node/packer/*/*.sh) $(wildcard kube-devbox/packer/*/*.sh) $(wildcard kube-devbox/scripts/*.sh) $(wildcard kube-devbox/tests/*.sh) $(DEVBOX_ROLE)/files/devbox-firewall-apply $(DEVBOX_ROLE)/files/devbox-tailscale-up $(wildcard .devcontainer/*.sh) .githooks/pre-commit
 BASE_REF  ?= $(shell git rev-parse --verify --quiet origin/main)
@@ -48,10 +47,7 @@ lint-pipelines:
 	tests/check-gitlab-ci.sh
 
 # Fixture variables stand in for the real ones, so no cloud access is needed.
-validate: $(addprefix validate-packer-,$(PROVIDERS)) validate-seed validate-devbox
-
-validate-packer-aws:
-	cd kube-node/packer/aws && packer init . && packer validate -var-file=$(CURDIR)/kube-node/tests/aws.pkrvars.hcl .
+validate: validate-packer-proxmox validate-seed validate-devbox
 
 # Packer reads the key file at validate time, so give it a throwaway one.
 validate-packer-proxmox:

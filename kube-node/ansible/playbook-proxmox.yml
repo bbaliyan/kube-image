@@ -4,6 +4,14 @@
   hosts: all
   gather_facts: true
   become: true
+  pre_tasks:
+    - name: inputs | require every value the Packer template passes
+      ansible.builtin.assert:
+        that:
+          - k8s_version is defined and k8s_version is match('^v[0-9]+[.][0-9]+[.][0-9]+[+]rke2r[0-9]+$')
+          - rendered_manifests_dir is defined and rendered_manifests_dir | length > 0
+        fail_msg: k8s_version and rendered_manifests_dir come from template.pkr.hcl. Build with build.sh.
+      tags: [always]
   roles:
     - rke2_bake_common
     - rke2_bake_proxmox
